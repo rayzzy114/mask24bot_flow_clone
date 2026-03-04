@@ -21,6 +21,9 @@ OPERATOR_HINTS = (
     "помощ",
     "тикет",
     "ticket",
+    "админ",
+    "admin",
+    "поддержк",
 )
 LINK_KEYWORDS: dict[str, tuple[str, ...]] = {
     "faq": ("faq",),

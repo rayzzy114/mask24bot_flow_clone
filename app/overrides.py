@@ -218,15 +218,15 @@ def _replace_payment_amounts(text: str, multiplier: float) -> str:
 
 
 def _parse_money_value(token: str) -> float | None:
-    cleaned = (token or "").replace("\u00a0", " ").replace(" ", "").replace(",", ".")
+    cleaned = (token or "").replace("\u00a0", " ").replace(" ", "")
+    if "." in cleaned and "," in cleaned:
+        if cleaned.rfind(".") > cleaned.rfind(","): cleaned = cleaned.replace(",", "")
+        else: cleaned = cleaned.replace(".", "").replace(",", ".")
+    else: cleaned = cleaned.replace(",", ".")
     cleaned = re.sub(r"[^0-9.]", "", cleaned)
-    if not cleaned or cleaned.count(".") > 1:
-        return None
-    try:
-        return float(cleaned)
-    except ValueError:
-        return None
-
+    if not cleaned or cleaned.count(".") > 1: return None
+    try: return float(cleaned)
+    except ValueError: return None
 
 def _format_like_source(value: float, source_token: str) -> str:
     token = source_token or ""
