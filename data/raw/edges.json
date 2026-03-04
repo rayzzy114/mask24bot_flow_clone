@@ -1,0 +1,552 @@
+[
+  {
+    "from": "0766f67fa47dc42e73977f19493cc7a3",
+    "action": "➡️ Далее",
+    "to": "282f5bb08cb59ce7b0d5edcc89657467"
+  },
+  {
+    "from": "07778a6f1dfafd09d32764457352b805",
+    "action": "<next-message>",
+    "to": "d600074b23116f8c1024a7916d46d43e"
+  },
+  {
+    "from": "0a9301de12c1eb935e70bd20f8a265fc",
+    "action": "<input>",
+    "to": "9c452c703228b9bf37e762944d1f0352"
+  },
+  {
+    "from": "17f5d94ce1cd1ecd275eecd88e2050e4",
+    "action": "🔙",
+    "to": "4dd498fb2857472407baa8a4e213d9d9"
+  },
+  {
+    "from": "230eb12bd9b1d8c5aea8da3109ab23ab",
+    "action": "💳 Карты на карту",
+    "to": "d01bd752a7c7268cfb326b919af2baa6"
+  },
+  {
+    "from": "230eb12bd9b1d8c5aea8da3109ab23ab",
+    "action": "💳 Карты на карту",
+    "to": "dd8e48ace94f57bf3eba334f6ab5b7d2"
+  },
+  {
+    "from": "230eb12bd9b1d8c5aea8da3109ab23ab",
+    "action": "💳 Карты на карту",
+    "to": "f29257f079d6fcdcb4dccc7ccf79bf53"
+  },
+  {
+    "from": "25ae85dcf0be92c8142533c4fc45d102",
+    "action": "<edited-message>",
+    "to": "f030d52026b5e589241efa54beb3eaff"
+  },
+  {
+    "from": "27a6d2e0f2222c7a1a6bbd9ca3c7edc6",
+    "action": "<manual-input>",
+    "to": "dfb384b9e6f22e229d85acf6dad7f44e"
+  },
+  {
+    "from": "282f5bb08cb59ce7b0d5edcc89657467",
+    "action": "❌ Отмена",
+    "to": "ec7347857d2b2531cf84d3d239457019"
+  },
+  {
+    "from": "29f216fb23387d3f4a350cccb3c1a092",
+    "action": "📮 Создать BTC Voucher",
+    "to": "31ed12ff3a0f71a3b2ac7a963bb23b6f"
+  },
+  {
+    "from": "2ef8496d7f6dd679ce5f07538fc689ac",
+    "action": "🎫 Использовать скидку?",
+    "to": "5bae1d970bfea8a23956992d39af6473"
+  },
+  {
+    "from": "2fed3c394a37b41f55f21d474b5734ae",
+    "action": "<next-message>",
+    "to": "dfff19cf359e360e6644c920d8eb7c6b"
+  },
+  {
+    "from": "31ed12ff3a0f71a3b2ac7a963bb23b6f",
+    "action": "Bitcoin (BTC)",
+    "to": "4dd498fb2857472407baa8a4e213d9d9"
+  },
+  {
+    "from": "38411b3ac84128632f281182e8a4f9db",
+    "action": "❌ Отмена",
+    "to": "d18a3c1f0ab4ccc32fda8910cb2ce45c"
+  },
+  {
+    "from": "39c2aa6a1534fa73a1a2ab96eef4cbb4",
+    "action": "<next-message>",
+    "to": "3bbc77ed316f311ad9018980f45b16f2"
+  },
+  {
+    "from": "39c2aa6a1534fa73a1a2ab96eef4cbb4",
+    "action": "<next-message>",
+    "to": "41a363148290b1a29357c1d9f16ec87f"
+  },
+  {
+    "from": "39c2aa6a1534fa73a1a2ab96eef4cbb4",
+    "action": "<next-message>",
+    "to": "4dd498fb2857472407baa8a4e213d9d9"
+  },
+  {
+    "from": "39c2aa6a1534fa73a1a2ab96eef4cbb4",
+    "action": "<next-message>",
+    "to": "997a9afc7041753ec43fc07ab9ea3ddb"
+  },
+  {
+    "from": "39c2aa6a1534fa73a1a2ab96eef4cbb4",
+    "action": "<next-message>",
+    "to": "a160600e3725f65bb4a46d00cf787790"
+  },
+  {
+    "from": "39c2aa6a1534fa73a1a2ab96eef4cbb4",
+    "action": "<next-message>",
+    "to": "f030d52026b5e589241efa54beb3eaff"
+  },
+  {
+    "from": "39c2aa6a1534fa73a1a2ab96eef4cbb4",
+    "action": "🆘  Помощь",
+    "to": "3bbc77ed316f311ad9018980f45b16f2"
+  },
+  {
+    "from": "39c2aa6a1534fa73a1a2ab96eef4cbb4",
+    "action": "🆘  Помощь",
+    "to": "608c7c7c98228174e8202d9f1a4564f6"
+  },
+  {
+    "from": "39c2aa6a1534fa73a1a2ab96eef4cbb4",
+    "action": "🔄  Обмен",
+    "to": "cb77e2d256ec6da86cc46a9c11857718"
+  },
+  {
+    "from": "39c2aa6a1534fa73a1a2ab96eef4cbb4",
+    "action": "🔐  Кошелек",
+    "to": "4dd498fb2857472407baa8a4e213d9d9"
+  },
+  {
+    "from": "3ab82195cd166a212675ab4cdaea64ee",
+    "action": "✅ Согласен",
+    "to": "e954a4c4265364330abb5d1a590c72f7"
+  },
+  {
+    "from": "3bbc77ed316f311ad9018980f45b16f2",
+    "action": "/start",
+    "to": "39c2aa6a1534fa73a1a2ab96eef4cbb4"
+  },
+  {
+    "from": "3bbc77ed316f311ad9018980f45b16f2",
+    "action": "<manual-input>",
+    "to": "39c2aa6a1534fa73a1a2ab96eef4cbb4"
+  },
+  {
+    "from": "3bbc77ed316f311ad9018980f45b16f2",
+    "action": "<next-message>",
+    "to": "4dd498fb2857472407baa8a4e213d9d9"
+  },
+  {
+    "from": "3bbc77ed316f311ad9018980f45b16f2",
+    "action": "<next-message>",
+    "to": "a160600e3725f65bb4a46d00cf787790"
+  },
+  {
+    "from": "3bbc77ed316f311ad9018980f45b16f2",
+    "action": "Bitcoin и электронные валюты",
+    "to": "41a363148290b1a29357c1d9f16ec87f"
+  },
+  {
+    "from": "41a363148290b1a29357c1d9f16ec87f",
+    "action": "<next-message>",
+    "to": "3bbc77ed316f311ad9018980f45b16f2"
+  },
+  {
+    "from": "41a363148290b1a29357c1d9f16ec87f",
+    "action": "⤴️ Свернуть",
+    "to": "3bbc77ed316f311ad9018980f45b16f2"
+  },
+  {
+    "from": "4638c2dc946f913813ff1d81427e5703",
+    "action": "<next-message>",
+    "to": "4dd498fb2857472407baa8a4e213d9d9"
+  },
+  {
+    "from": "4a985fd53a6cf0fb74877721f588a4d0",
+    "action": "✅ Согласен",
+    "to": "25ae85dcf0be92c8142533c4fc45d102"
+  },
+  {
+    "from": "4dd498fb2857472407baa8a4e213d9d9",
+    "action": "<next-message>",
+    "to": "98399949795fe1949116f8a4ad3119e9"
+  },
+  {
+    "from": "4dd498fb2857472407baa8a4e213d9d9",
+    "action": "<next-message>",
+    "to": "997a9afc7041753ec43fc07ab9ea3ddb"
+  },
+  {
+    "from": "4dd498fb2857472407baa8a4e213d9d9",
+    "action": "<next-message>",
+    "to": "a160600e3725f65bb4a46d00cf787790"
+  },
+  {
+    "from": "4dd498fb2857472407baa8a4e213d9d9",
+    "action": "<next-message>",
+    "to": "f881dd1f7333cd736df7175edde98b18"
+  },
+  {
+    "from": "4dd498fb2857472407baa8a4e213d9d9",
+    "action": "Вывод на карту",
+    "to": "72dd97d1eb3ce693e74e6a4608f22104"
+  },
+  {
+    "from": "4dd498fb2857472407baa8a4e213d9d9",
+    "action": "🏷 Активировать промокод",
+    "to": "0a9301de12c1eb935e70bd20f8a265fc"
+  },
+  {
+    "from": "4dd498fb2857472407baa8a4e213d9d9",
+    "action": "💼 Партнерка 15%",
+    "to": "8374d8848b7f1e2bab94b21037d5c16b"
+  },
+  {
+    "from": "4dd498fb2857472407baa8a4e213d9d9",
+    "action": "📤 Отправить",
+    "to": "b431f99da6e9a524a9846e8c7a37aa70"
+  },
+  {
+    "from": "4dd498fb2857472407baa8a4e213d9d9",
+    "action": "📥 Получить",
+    "to": "98399949795fe1949116f8a4ad3119e9"
+  },
+  {
+    "from": "4dd498fb2857472407baa8a4e213d9d9",
+    "action": "📮 BTC Ваучер",
+    "to": "29f216fb23387d3f4a350cccb3c1a092"
+  },
+  {
+    "from": "4dd498fb2857472407baa8a4e213d9d9",
+    "action": "🛡 Безопасность",
+    "to": "a0f75d0c94a18e7bceeb4672b8d94b25"
+  },
+  {
+    "from": "4dd498fb2857472407baa8a4e213d9d9",
+    "action": "🤝 P2P Торговля",
+    "to": "f881dd1f7333cd736df7175edde98b18"
+  },
+  {
+    "from": "5bae1d970bfea8a23956992d39af6473",
+    "action": "<edited-message>",
+    "to": "39c2aa6a1534fa73a1a2ab96eef4cbb4"
+  },
+  {
+    "from": "608c7c7c98228174e8202d9f1a4564f6",
+    "action": "<next-message>",
+    "to": "39c2aa6a1534fa73a1a2ab96eef4cbb4"
+  },
+  {
+    "from": "72dd97d1eb3ce693e74e6a4608f22104",
+    "action": "<next-message>",
+    "to": "b431f99da6e9a524a9846e8c7a37aa70"
+  },
+  {
+    "from": "7ce70c281eb57574028a6b6d3a63013b",
+    "action": "<next-message>",
+    "to": "07778a6f1dfafd09d32764457352b805"
+  },
+  {
+    "from": "7ce70c281eb57574028a6b6d3a63013b",
+    "action": "<next-message>",
+    "to": "8948d67f3f79c1e2a2f6f2337f2ae9fb"
+  },
+  {
+    "from": "8374d8848b7f1e2bab94b21037d5c16b",
+    "action": "🔄 Вывести",
+    "to": "17f5d94ce1cd1ecd275eecd88e2050e4"
+  },
+  {
+    "from": "8948d67f3f79c1e2a2f6f2337f2ae9fb",
+    "action": "<next-message>",
+    "to": "4a985fd53a6cf0fb74877721f588a4d0"
+  },
+  {
+    "from": "8a72ee82f092736c620590cdda05b00c",
+    "action": "<next-message>",
+    "to": "39c2aa6a1534fa73a1a2ab96eef4cbb4"
+  },
+  {
+    "from": "98399949795fe1949116f8a4ad3119e9",
+    "action": "/start",
+    "to": "39c2aa6a1534fa73a1a2ab96eef4cbb4"
+  },
+  {
+    "from": "98399949795fe1949116f8a4ad3119e9",
+    "action": "<next-message>",
+    "to": "39c2aa6a1534fa73a1a2ab96eef4cbb4"
+  },
+  {
+    "from": "997a9afc7041753ec43fc07ab9ea3ddb",
+    "action": "<next-message>",
+    "to": "3bbc77ed316f311ad9018980f45b16f2"
+  },
+  {
+    "from": "997a9afc7041753ec43fc07ab9ea3ddb",
+    "action": "<next-message>",
+    "to": "4dd498fb2857472407baa8a4e213d9d9"
+  },
+  {
+    "from": "997a9afc7041753ec43fc07ab9ea3ddb",
+    "action": "<next-message>",
+    "to": "ccfe27e5d0988c5b138c0640984767d9"
+  },
+  {
+    "from": "997a9afc7041753ec43fc07ab9ea3ddb",
+    "action": "🎰 Беспроигрышная лотерея",
+    "to": "f030d52026b5e589241efa54beb3eaff"
+  },
+  {
+    "from": "997a9afc7041753ec43fc07ab9ea3ddb",
+    "action": "💵 Реферальная программа",
+    "to": "e55b9d0194c887e74895bea27835bf49"
+  },
+  {
+    "from": "997a9afc7041753ec43fc07ab9ea3ddb",
+    "action": "🤲🏻 Благотворительность",
+    "to": "aa67b94cd48916a1e7f23c047ada5321"
+  },
+  {
+    "from": "9c452c703228b9bf37e762944d1f0352",
+    "action": "<next-message>",
+    "to": "4dd498fb2857472407baa8a4e213d9d9"
+  },
+  {
+    "from": "9ee3e3de37a2c4ae347318b2cc928b28",
+    "action": "<next-message>",
+    "to": "39c2aa6a1534fa73a1a2ab96eef4cbb4"
+  },
+  {
+    "from": "9ff74b9bf7f060310f1e52607e00c4b7",
+    "action": "<next-message>",
+    "to": "e8741ca01917b794b477050010b5dd61"
+  },
+  {
+    "from": "9ff74b9bf7f060310f1e52607e00c4b7",
+    "action": "✅ Я оплатил",
+    "to": "c6f698c6c412d3f6d590f6b688a3ef18"
+  },
+  {
+    "from": "a0f75d0c94a18e7bceeb4672b8d94b25",
+    "action": "<next-message>",
+    "to": "f881dd1f7333cd736df7175edde98b18"
+  },
+  {
+    "from": "a160600e3725f65bb4a46d00cf787790",
+    "action": "/start",
+    "to": "39c2aa6a1534fa73a1a2ab96eef4cbb4"
+  },
+  {
+    "from": "a160600e3725f65bb4a46d00cf787790",
+    "action": "<next-message>",
+    "to": "39c2aa6a1534fa73a1a2ab96eef4cbb4"
+  },
+  {
+    "from": "a160600e3725f65bb4a46d00cf787790",
+    "action": "<next-message>",
+    "to": "3bbc77ed316f311ad9018980f45b16f2"
+  },
+  {
+    "from": "a160600e3725f65bb4a46d00cf787790",
+    "action": "<next-message>",
+    "to": "4dd498fb2857472407baa8a4e213d9d9"
+  },
+  {
+    "from": "a160600e3725f65bb4a46d00cf787790",
+    "action": "<next-message>",
+    "to": "997a9afc7041753ec43fc07ab9ea3ddb"
+  },
+  {
+    "from": "a160600e3725f65bb4a46d00cf787790",
+    "action": "<next-message>",
+    "to": "f030d52026b5e589241efa54beb3eaff"
+  },
+  {
+    "from": "aa67b94cd48916a1e7f23c047ada5321",
+    "action": "<next-message>",
+    "to": "39c2aa6a1534fa73a1a2ab96eef4cbb4"
+  },
+  {
+    "from": "b431f99da6e9a524a9846e8c7a37aa70",
+    "action": "<input>",
+    "to": "9ee3e3de37a2c4ae347318b2cc928b28"
+  },
+  {
+    "from": "b431f99da6e9a524a9846e8c7a37aa70",
+    "action": "<next-message>",
+    "to": "4638c2dc946f913813ff1d81427e5703"
+  },
+  {
+    "from": "c470c94e034f1631e0c841615c07c46b",
+    "action": "<next-message>",
+    "to": "39c2aa6a1534fa73a1a2ab96eef4cbb4"
+  },
+  {
+    "from": "c6f698c6c412d3f6d590f6b688a3ef18",
+    "action": "<edited-message>",
+    "to": "997a9afc7041753ec43fc07ab9ea3ddb"
+  },
+  {
+    "from": "cb77e2d256ec6da86cc46a9c11857718",
+    "action": "<next-message>",
+    "to": "d18a3c1f0ab4ccc32fda8910cb2ce45c"
+  },
+  {
+    "from": "cb77e2d256ec6da86cc46a9c11857718",
+    "action": "⏩ Пропустить",
+    "to": "38411b3ac84128632f281182e8a4f9db"
+  },
+  {
+    "from": "cb77e2d256ec6da86cc46a9c11857718",
+    "action": "⏩ Пропустить",
+    "to": "d18a3c1f0ab4ccc32fda8910cb2ce45c"
+  },
+  {
+    "from": "cb77e2d256ec6da86cc46a9c11857718",
+    "action": "✅ Пройти верификацию",
+    "to": "0766f67fa47dc42e73977f19493cc7a3"
+  },
+  {
+    "from": "ccfe27e5d0988c5b138c0640984767d9",
+    "action": "🔄 Приступить к обмену",
+    "to": "a160600e3725f65bb4a46d00cf787790"
+  },
+  {
+    "from": "d01bd752a7c7268cfb326b919af2baa6",
+    "action": "<next-message>",
+    "to": "e2d74cb3746b83d222213a0d6d267bf1"
+  },
+  {
+    "from": "d10355801a11f2d98b2f14663355934e",
+    "action": "<manual-input>",
+    "to": "7ce70c281eb57574028a6b6d3a63013b"
+  },
+  {
+    "from": "d18a3c1f0ab4ccc32fda8910cb2ce45c",
+    "action": "<next-message>",
+    "to": "230eb12bd9b1d8c5aea8da3109ab23ab"
+  },
+  {
+    "from": "d18a3c1f0ab4ccc32fda8910cb2ce45c",
+    "action": "<next-message>",
+    "to": "f030d52026b5e589241efa54beb3eaff"
+  },
+  {
+    "from": "d18a3c1f0ab4ccc32fda8910cb2ce45c",
+    "action": "Litecoin (LTC)",
+    "to": "230eb12bd9b1d8c5aea8da3109ab23ab"
+  },
+  {
+    "from": "d18a3c1f0ab4ccc32fda8910cb2ce45c",
+    "action": "Tether (USDT)",
+    "to": "230eb12bd9b1d8c5aea8da3109ab23ab"
+  },
+  {
+    "from": "d18a3c1f0ab4ccc32fda8910cb2ce45c",
+    "action": "Рубль (₽)",
+    "to": "f1350b4942a774de724bb74322d2cf9d"
+  },
+  {
+    "from": "d600074b23116f8c1024a7916d46d43e",
+    "action": "✅ Согласен",
+    "to": "c470c94e034f1631e0c841615c07c46b"
+  },
+  {
+    "from": "dd8e48ace94f57bf3eba334f6ab5b7d2",
+    "action": "<input>",
+    "to": "2fed3c394a37b41f55f21d474b5734ae"
+  },
+  {
+    "from": "dfff19cf359e360e6644c920d8eb7c6b",
+    "action": "<next-message>",
+    "to": "9ff74b9bf7f060310f1e52607e00c4b7"
+  },
+  {
+    "from": "e2d74cb3746b83d222213a0d6d267bf1",
+    "action": "<manual-input>",
+    "to": "3ab82195cd166a212675ab4cdaea64ee"
+  },
+  {
+    "from": "e55b9d0194c887e74895bea27835bf49",
+    "action": "🔙 Назад",
+    "to": "997a9afc7041753ec43fc07ab9ea3ddb"
+  },
+  {
+    "from": "e8741ca01917b794b477050010b5dd61",
+    "action": "<next-message>",
+    "to": "9ff74b9bf7f060310f1e52607e00c4b7"
+  },
+  {
+    "from": "e954a4c4265364330abb5d1a590c72f7",
+    "action": "<next-message>",
+    "to": "8a72ee82f092736c620590cdda05b00c"
+  },
+  {
+    "from": "ec7347857d2b2531cf84d3d239457019",
+    "action": "❌ Отмена",
+    "to": "cb77e2d256ec6da86cc46a9c11857718"
+  },
+  {
+    "from": "f030d52026b5e589241efa54beb3eaff",
+    "action": "<next-message>",
+    "to": "39c2aa6a1534fa73a1a2ab96eef4cbb4"
+  },
+  {
+    "from": "f030d52026b5e589241efa54beb3eaff",
+    "action": "<next-message>",
+    "to": "f9530086595ec4d827e2c1df11489593"
+  },
+  {
+    "from": "f030d52026b5e589241efa54beb3eaff",
+    "action": "Да",
+    "to": "27a6d2e0f2222c7a1a6bbd9ca3c7edc6"
+  },
+  {
+    "from": "f030d52026b5e589241efa54beb3eaff",
+    "action": "Да",
+    "to": "39c2aa6a1534fa73a1a2ab96eef4cbb4"
+  },
+  {
+    "from": "f030d52026b5e589241efa54beb3eaff",
+    "action": "Нет",
+    "to": "39c2aa6a1534fa73a1a2ab96eef4cbb4"
+  },
+  {
+    "from": "f1350b4942a774de724bb74322d2cf9d",
+    "action": "🔙 Назад",
+    "to": "cb77e2d256ec6da86cc46a9c11857718"
+  },
+  {
+    "from": "f29257f079d6fcdcb4dccc7ccf79bf53",
+    "action": "USDT (BSC20)",
+    "to": "d10355801a11f2d98b2f14663355934e"
+  },
+  {
+    "from": "f29257f079d6fcdcb4dccc7ccf79bf53",
+    "action": "USDT (TRC20)",
+    "to": "d10355801a11f2d98b2f14663355934e"
+  },
+  {
+    "from": "f881dd1f7333cd736df7175edde98b18",
+    "action": "<next-message>",
+    "to": "4dd498fb2857472407baa8a4e213d9d9"
+  },
+  {
+    "from": "f881dd1f7333cd736df7175edde98b18",
+    "action": "🔙 Назад",
+    "to": "4dd498fb2857472407baa8a4e213d9d9"
+  },
+  {
+    "from": "f9530086595ec4d827e2c1df11489593",
+    "action": "<manual-input>",
+    "to": "39c2aa6a1534fa73a1a2ab96eef4cbb4"
+  }
+]

@@ -1,0 +1,42 @@
+{
+  "commission_percent": 20.0,
+  "links": {
+    "faq": "https://t.me/mnIn_news",
+    "channel": "https://t.me/mnIn_news",
+    "chat": "https://t.me/mnln_24",
+    "reviews": "https://t.me/mnIn_news",
+    "review_form": "https://t.me/mnln_24",
+    "manager": "https://t.me/MNLN_24",
+    "operator": "https://t.me/mask24_bot",
+    "terms": "https://t.me/mnIn_news"
+  },
+  "sell_wallets": {
+    "btc": "",
+    "ltc": "",
+    "usdt_trc20": "",
+    "usdt_bsc": "",
+    "eth": "",
+    "trx": "",
+    "xmr": "",
+    "ton": ""
+  },
+  "requisites": {
+    "mode": "single",
+    "single_bank": "Сбербанк",
+    "single_value": "2200 0000 0000 0000",
+    "payment_methods": [
+      "Перевод на карту",
+      "СБП"
+    ],
+    "split_by_method": {
+      "Перевод на карту": {
+        "bank": "Сбербанк",
+        "value": "2200 0000 0000 0000"
+      },
+      "СБП": {
+        "bank": "Сбербанк",
+        "value": "2200 0000 0000 0000"
+      }
+    }
+  }
+}
