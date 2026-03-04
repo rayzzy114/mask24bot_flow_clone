@@ -405,7 +405,16 @@ class FlowRuntime:
             return explicit
         
         # Pop from history
-        return session.pop_state()
+        prev_state = session.pop_state()
+        if prev_state is None:
+            # If stack is empty or has only 1 element left, send user to start state
+            start_sid = self.catalog.start_state_id
+            if session.state_id != start_sid:
+                session.jump_to_state(start_sid, reset_history=True)
+                return start_sid
+            return None # Already at start state, do nothing
+
+        return prev_state
 
     def _validate_input(self, state_id: str, text: str) -> bool:
         """Validate input based on state text hints and checksums."""
