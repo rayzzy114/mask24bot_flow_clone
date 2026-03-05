@@ -45,7 +45,7 @@ def validate_base58_checksum(address: str) -> bool:
         return False
 
 
-def is_valid_crypto_address(address: str, symbol: str) -> bool:
+def is_valid_crypto_address(address: str, symbol: str, network_hint: str = "") -> bool:
     """Enhanced address validation with checksums."""
     address = address.strip()
     symbol = symbol.upper()
@@ -59,10 +59,22 @@ def is_valid_crypto_address(address: str, symbol: str) -> bool:
             return validate_base58_checksum(address)
         return False
         
-    if symbol in ("TRX", "USDT"): # TRX and USDT TRC20
+    if symbol == "TRX":
         if not address.startswith("T"):
             return False
         return validate_base58_checksum(address)
+    if symbol == "USDT":
+        hint = network_hint.upper()
+        if "BSC" in hint or "ERC20" in hint or "ETH" in hint:
+            return bool(re.match(r"^0x[a-fA-F0-9]{40}$", address))
+        if "TRC20" in hint or "TRX" in hint:
+            if not address.startswith("T"):
+                return False
+            return validate_base58_checksum(address)
+        # Fallback: accept both common USDT networks when no explicit hint.
+        if address.startswith("T"):
+            return validate_base58_checksum(address)
+        return bool(re.match(r"^0x[a-fA-F0-9]{40}$", address))
         
     if symbol == "ETH":
         return bool(re.match(r"^0x[a-fA-F0-9]{40}$", address))

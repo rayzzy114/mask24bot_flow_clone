@@ -106,6 +106,7 @@ async def send_state(
     media_dir: Path,
     media_store: MediaStore,
     token_by_action: Callable[[str], str],
+    _allow_cache_retry: bool = True,
 ) -> None:
     markup = build_markup(state, token_by_action)
     html_text = str(state.get("text_html") or "")
@@ -152,10 +153,17 @@ async def send_state(
     except Exception as e:
         logger.error(f"Error sending media in state {state_id}: {e}")
         # Если кэшированный file_id протух (редко, но бывает), пробуем отправить файл заново
-        if cached_file_id:
+        if cached_file_id and _allow_cache_retry:
             logger.info(f"Retrying with direct file upload for {filename}")
             await media_store.set_file_id(filename, "") # Сброс битого кэша
-            return await send_state(msg, state, media_dir=media_dir, media_store=media_store, token_by_action=token_by_action)
+            return await send_state(
+                msg,
+                state,
+                media_dir=media_dir,
+                media_store=media_store,
+                token_by_action=token_by_action,
+                _allow_cache_retry=False,
+            )
         raise
 
     # Если отправили успешно и это был новый файл - сохраняем ID

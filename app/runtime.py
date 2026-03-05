@@ -75,7 +75,14 @@ def state_button_rows(state: dict[str, Any]) -> list[list[dict[str, Any]]]:
 
 class FlowRuntime:
     _MAX_AMOUNT_USD_BUDGET = 100.0
+    _MIN_AMOUNT_BTC_BASE = 0.00004960
+    _AMOUNT_DUST_FLOOR = 0.00001
     _MAX_AMOUNT_ERROR_STATE_ID = "2fed3c394a37b41f55f21d474b5734ae"
+    _MIN_AMOUNT_STATE_IDS = {
+        "4638c2dc946f913813ff1d81427e5703",
+        "dd8e48ace94f57bf3eba334f6ab5b7d2",
+        "d10355801a11f2d98b2f14663355934e",
+    }
 
     def __init__(
         self,
@@ -407,7 +414,7 @@ class FlowRuntime:
         # If no explicit action, but state accepts input, we validate and use <manual-input>/<input>
         if next_state is None and self.catalog.state_accepts_input(session.state_id):
             # Input validation (only if we have text)
-            if text and not self._validate_input(session.state_id, text):
+            if text and not self._validate_input(session.state_id, text, session=session):
                 error_state = self._find_error_state(session.state_id, text)
                 if error_state:
                     await self._send_state_by_id(msg, error_state, session=session)
@@ -502,6 +509,18 @@ class FlowRuntime:
             return rub_budget / coin_rate
         return self._MAX_AMOUNT_USD_BUDGET
 
+    async def _coin_min_amount(self, coin: str) -> float:
+        symbol = (coin or "BTC").upper()
+        rates = await self._get_live_rates_rub()
+        btc_rate = float(rates.get("BTC") or 0.0)
+        coin_rate = float(rates.get(symbol) or 0.0)
+        if symbol == "BTC":
+            return self._MIN_AMOUNT_BTC_BASE
+        if btc_rate > 0 and coin_rate > 0:
+            rub_min = self._MIN_AMOUNT_BTC_BASE * btc_rate
+            return rub_min / coin_rate
+        return self._MIN_AMOUNT_BTC_BASE
+
     def _resolve_back_state(self, session: UserSession, action_text: str) -> str | None:
         """Try to find an explicit 'Back' edge, otherwise pop history."""
         normalized_action = self._normalize_action_text(action_text)
@@ -537,7 +556,7 @@ class FlowRuntime:
 
         return prev_state
 
-    def _validate_input(self, state_id: str, text: str) -> bool:
+    def _validate_input(self, state_id: str, text: str, *, session: UserSession | None = None) -> bool:
         """Validate input based on state text hints and checksums."""
         state_text = self._state_text(state_id).upper()
         
@@ -545,7 +564,7 @@ class FlowRuntime:
         for coin, regex in FLOW_CATALOG_RE_MAP.items():
             if coin in state_text and ("АДРЕС" in state_text or "WALLET" in state_text or "КОШЕЛЕК" in state_text or "ПРИСЛАТЬ" in state_text):
                 # We found a coin hint, now use strict checksum validation
-                return is_valid_crypto_address(text, coin)
+                return is_valid_crypto_address(text, coin, network_hint=state_text)
         
         # If it looks like an address input but coin not found in text, try all known crypto
         if ("АДРЕС" in state_text or "WALLET" in state_text or "КОШЕЛЕК" in state_text) and len(text) > 20 and " " not in text:
@@ -556,6 +575,8 @@ class FlowRuntime:
                 return True
             if is_valid_crypto_address(text, "ETH"):
                 return True
+            if is_valid_crypto_address(text, "USDT", network_hint=state_text):
+                return True
             return False
 
         # Check for amount patterns
@@ -563,8 +584,9 @@ class FlowRuntime:
             try:
                 val_str = text.replace(",", ".").replace(" ", "")
                 val = float(val_str)
-                # Ensure it's not a tiny/dust amount for BTC
-                if "BTC" in state_text and val < 0.00001:
+                # Ensure it's not a tiny/dust amount for crypto inputs
+                coin = ((session.selected_coin if session else "") or self._extract_coin_from_state_text(state_text) or "").upper()
+                if coin and coin != "RUB" and val < self._AMOUNT_DUST_FLOOR:
                     return False
                 return val > 0
             except ValueError:
@@ -1026,25 +1048,58 @@ class FlowRuntime:
         state_id: str,
         session: UserSession | None,
     ) -> dict[str, Any]:
-        if state_id != self._MAX_AMOUNT_ERROR_STATE_ID:
-            return state
         coin = ((session.selected_coin if session else "") or "BTC").upper()
         max_amount = await self._coin_max_amount(coin)
-        formatted = f"{max_amount:.8f}"
+        min_amount = await self._coin_min_amount(coin)
+        formatted_max = f"{max_amount:.8f}"
+        formatted_min = f"{min_amount:.8f}"
 
         themed = dict(state)
         for key in ("text", "text_html", "text_markdown"):
             val = str(themed.get(key) or "")
             if not val:
                 continue
-            val = re.sub(
-                r"(Максимум(?:\s|</?[^>]+>|[*_])*)([0-9]+(?:[.,][0-9]+)?)",
-                rf"\g<1>{formatted}",
-                val,
-                flags=re.IGNORECASE,
-            )
+            if state_id == self._MAX_AMOUNT_ERROR_STATE_ID:
+                val = re.sub(
+                    r"(Максимум(?:\s|</?[^>]+>|[*_])*)([0-9]+(?:[.,][0-9]+)?)",
+                    rf"\g<1>{formatted_max}",
+                    val,
+                    flags=re.IGNORECASE,
+                )
+            if state_id in self._MIN_AMOUNT_STATE_IDS:
+                val = re.sub(
+                    r"(Минимум(?:\s*:\s*|\s+))([0-9]+(?:[.,][0-9]+)?)",
+                    rf"\g<1>{formatted_min}",
+                    val,
+                    flags=re.IGNORECASE,
+                )
+                val = re.sub(
+                    r"(от\s+)([0-9]+(?:[.,][0-9]+)?)(\s+[A-Z]{2,5})",
+                    rf"\g<1>{formatted_min}\g<3>",
+                    val,
+                    flags=re.IGNORECASE,
+                )
             themed[key] = val
         return themed
+
+    def _extract_coin_from_state_text(self, state_text_upper: str) -> str:
+        if any(k in state_text_upper for k in ("USDT", "TETHER", "TRC20", "BSC20", "BEP20")):
+            return "USDT"
+        if "BTC" in state_text_upper or "BITCOIN" in state_text_upper:
+            return "BTC"
+        if "LTC" in state_text_upper or "LITECOIN" in state_text_upper:
+            return "LTC"
+        if "ETH" in state_text_upper or "ETHEREUM" in state_text_upper:
+            return "ETH"
+        if "XMR" in state_text_upper or "MONERO" in state_text_upper:
+            return "XMR"
+        if "TRX" in state_text_upper or "TRON" in state_text_upper:
+            return "TRX"
+        if "TON" in state_text_upper:
+            return "TON"
+        if "RUB" in state_text_upper or "₽" in state_text_upper:
+            return "RUB"
+        return ""
 
     def _state_has_only_system_next(self, state_id: str) -> bool:
         action_map = self.catalog.transition_index.get(state_id) or {}

@@ -374,6 +374,33 @@ async def test_apply_dynamic_amount_limits_replaces_value_in_text_html_strong_ma
 
 
 @pytest.mark.asyncio
+async def test_apply_dynamic_amount_limits_replaces_minimum_value(runtime_ctx):
+    runtime, _ = runtime_ctx
+    state_id = "dd8e48ace94f57bf3eba334f6ab5b7d2"
+    session = UserSession(state_id=state_id, selected_coin="ETH")
+    runtime._coin_min_amount = AsyncMock(return_value=0.01234567)
+    base_state = {
+        "text": "💰Введи нужную сумму\nМинимум: 35.00 USDT",
+        "text_html": "<code>Минимум: 35.00 USDT</code>",
+        "text_markdown": "`Минимум: 35.00 USDT`",
+    }
+
+    themed = await runtime._apply_dynamic_amount_limits(base_state, state_id=state_id, session=session)
+
+    assert "0.01234567" in str(themed.get("text") or "")
+    assert "0.01234567" in str(themed.get("text_html") or "")
+    assert "35.00" not in str(themed.get("text") or "")
+
+
+def test_validate_input_rejects_eth_dust_with_selected_coin(runtime_ctx):
+    runtime, _ = runtime_ctx
+    amount_state_id = "dd8e48ace94f57bf3eba334f6ab5b7d2"
+    session = UserSession(state_id=amount_state_id, selected_coin="ETH")
+    assert runtime._validate_input(amount_state_id, "0.00000001", session=session) is False
+    assert runtime._validate_input(amount_state_id, "0.01000000", session=session) is True
+
+
+@pytest.mark.asyncio
 async def test_wallet_state_free_text_moves_to_system_next(runtime_ctx):
     runtime, _ = runtime_ctx
     wallet_state = "dfff19cf359e360e6644c920d8eb7c6b"
