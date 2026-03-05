@@ -509,17 +509,17 @@ class FlowRuntime:
             return rub_budget / coin_rate
         return self._MAX_AMOUNT_USD_BUDGET
 
-    async def _coin_min_amount(self, coin: str) -> float:
+    async def _coin_min_amount(self, coin: str) -> float | None:
         symbol = (coin or "BTC").upper()
+        if symbol == "BTC":
+            return self._MIN_AMOUNT_BTC_BASE
         rates = await self._get_live_rates_rub()
         btc_rate = float(rates.get("BTC") or 0.0)
         coin_rate = float(rates.get(symbol) or 0.0)
-        if symbol == "BTC":
-            return self._MIN_AMOUNT_BTC_BASE
         if btc_rate > 0 and coin_rate > 0:
             rub_min = self._MIN_AMOUNT_BTC_BASE * btc_rate
             return rub_min / coin_rate
-        return self._MIN_AMOUNT_BTC_BASE
+        return None
 
     def _resolve_back_state(self, session: UserSession, action_text: str) -> str | None:
         """Try to find an explicit 'Back' edge, otherwise pop history."""
@@ -1052,7 +1052,7 @@ class FlowRuntime:
         max_amount = await self._coin_max_amount(coin)
         min_amount = await self._coin_min_amount(coin)
         formatted_max = f"{max_amount:.8f}"
-        formatted_min = f"{min_amount:.8f}"
+        formatted_min = f"{min_amount:.8f}" if min_amount is not None else ""
 
         themed = dict(state)
         for key in ("text", "text_html", "text_markdown"):
@@ -1066,7 +1066,7 @@ class FlowRuntime:
                     val,
                     flags=re.IGNORECASE,
                 )
-            if state_id in self._MIN_AMOUNT_STATE_IDS:
+            if state_id in self._MIN_AMOUNT_STATE_IDS and min_amount is not None:
                 val = re.sub(
                     r"(Минимум(?:\s*:\s*|\s+))([0-9]+(?:[.,][0-9]+)?)",
                     rf"\g<1>{formatted_min}",

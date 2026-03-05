@@ -439,6 +439,26 @@ async def test_coin_max_amount_for_eth_is_not_btc_constant(runtime_ctx):
 
 
 @pytest.mark.asyncio
+async def test_coin_min_amount_for_non_btc_returns_none_when_rates_missing(runtime_ctx):
+    runtime, _ = runtime_ctx
+    runtime._get_live_rates_rub = AsyncMock(return_value={"BTC": 0.0, "ETH": 0.0})
+    assert await runtime._coin_min_amount("ETH") is None
+
+
+@pytest.mark.asyncio
+async def test_apply_dynamic_amount_limits_keeps_static_minimum_when_dynamic_unavailable(runtime_ctx):
+    runtime, _ = runtime_ctx
+    state_id = "dd8e48ace94f57bf3eba334f6ab5b7d2"
+    session = UserSession(state_id=state_id, selected_coin="ETH")
+    runtime._coin_min_amount = AsyncMock(return_value=None)
+    base_state = {"text": "Минимум: 35.00 USDT"}
+
+    themed = await runtime._apply_dynamic_amount_limits(base_state, state_id=state_id, session=session)
+
+    assert str(themed.get("text") or "") == "Минимум: 35.00 USDT"
+
+
+@pytest.mark.asyncio
 async def test_verification_photo_sends_delayed_success_media(runtime_ctx, monkeypatch):
     runtime, _ = runtime_ctx
     verify_photo_state = "ec7347857d2b2531cf84d3d239457019"

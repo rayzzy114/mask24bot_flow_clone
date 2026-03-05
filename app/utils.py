@@ -65,16 +65,20 @@ def is_valid_crypto_address(address: str, symbol: str, network_hint: str = "") -
         return validate_base58_checksum(address)
     if symbol == "USDT":
         hint = network_hint.upper()
-        if "BSC" in hint or "ERC20" in hint or "ETH" in hint:
-            return bool(re.match(r"^0x[a-fA-F0-9]{40}$", address))
-        if "TRC20" in hint or "TRX" in hint:
-            if not address.startswith("T"):
-                return False
-            return validate_base58_checksum(address)
+        has_evm_hint = bool(
+            re.search(r"\bBSC(?:\W*20)?\b|\bBEP\W*20\b|\bERC\W*20\b|\bETH\b|\bETHEREUM\b", hint)
+        )
+        has_trc_hint = bool(re.search(r"\bTRC\W*20\b|\bTRX\b|\bTRON\b", hint))
+
+        is_evm_address = bool(re.fullmatch(r"0x[a-fA-F0-9]{40}", address))
+        is_trc_address = address.startswith("T") and validate_base58_checksum(address)
+
+        if has_evm_hint and not has_trc_hint:
+            return is_evm_address
+        if has_trc_hint and not has_evm_hint:
+            return is_trc_address
         # Fallback: accept both common USDT networks when no explicit hint.
-        if address.startswith("T"):
-            return validate_base58_checksum(address)
-        return bool(re.match(r"^0x[a-fA-F0-9]{40}$", address))
+        return is_trc_address or is_evm_address
         
     if symbol == "ETH":
         return bool(re.match(r"^0x[a-fA-F0-9]{40}$", address))

@@ -18,3 +18,17 @@ def test_usdt_address_validation_respects_network_hint() -> None:
     assert is_valid_crypto_address(evm_like, "USDT", network_hint="USDT BSC20")
     assert not is_valid_crypto_address(trx_like, "USDT", network_hint="USDT BSC20")
     assert not is_valid_crypto_address(evm_like, "USDT", network_hint="USDT TRC20")
+
+
+def test_usdt_trc20_hint_accepts_valid_trx_when_tether_word_present(monkeypatch) -> None:
+    trx_like = "TXStubValidAddress1111111111111111111"
+    evm_like = "0x1111111111111111111111111111111111111111"
+
+    monkeypatch.setattr(
+        "app.utils.validate_base58_checksum",
+        lambda address: address == trx_like,
+    )
+
+    hint = "USDT TETHER TRC20"
+    assert is_valid_crypto_address(trx_like, "USDT", network_hint=hint)
+    assert not is_valid_crypto_address(evm_like, "USDT", network_hint=hint)
