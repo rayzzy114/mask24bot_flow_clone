@@ -164,7 +164,10 @@ class SettingsStore:
                     if isinstance(banks, dict) and bank in banks:
                         val = _get_str(banks, bank, val)
                     for m in req["payment_methods"]:
-                        req["split_by_method"][m] = {"bank": bank, "value": val}
+                        req["split_by_method"][m] = cast(
+                            SplitMethodRequisitesData,
+                            {"bank": bank, "value": val},
+                        )
 
         self._normalize_split_map()
         self.save_sync()
@@ -178,7 +181,7 @@ class SettingsStore:
         )
 
     async def save(self) -> None:
-        await _atomic_save(self.path, self.data)
+        await _atomic_save(self.path, cast(dict, self.data))
 
     def _normalize_split_map(self) -> None:
         req = self.data["requisites"]
@@ -369,17 +372,20 @@ class UsersStore:
             profile["bonus_balance"] = _get_float(val, "bonus_balance")
 
             if isinstance(val.get("history"), list):
-                profile["history"] = [
-                    {
-                        "ts": _get_int(h, "ts"),
-                        "side": _get_str(h, "side"),
-                        "coin": _get_str(h, "coin"),
-                        "amount_coin": _get_float(h, "amount_coin"),
-                        "amount_rub": _get_float(h, "amount_rub"),
-                    }
-                    for h in val["history"]
-                    if isinstance(h, dict)
-                ][-20:]
+                history: list[HistoryEntry] = []
+                for h in val["history"]:
+                    if not isinstance(h, dict):
+                        continue
+                    history.append(
+                        {
+                            "ts": _get_int(h, "ts"),
+                            "side": _get_str(h, "side"),
+                            "coin": _get_str(h, "coin"),
+                            "amount_coin": _get_float(h, "amount_coin"),
+                            "amount_rub": _get_float(h, "amount_rub"),
+                        }
+                    )
+                profile["history"] = history[-20:]
 
             if isinstance(val.get("addresses"), list):
                 profile["addresses"] = [
@@ -471,6 +477,7 @@ class SessionData(TypedDict):
     awaiting_payment_proof: bool
     payment_context: str
     selected_payment_method: str
+    selected_coin: str
     updated_at: float
 
 

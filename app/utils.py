@@ -21,8 +21,10 @@ def base58_decode(v: str) -> bytes | None:
     # Handle leading '1's
     pad = 0
     for char in v:
-        if char == '1': pad += 1
-        else: break
+        if char == "1":
+            pad += 1
+        else:
+            break
         
     return bytes([0] * pad + res[::-1])
 

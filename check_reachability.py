@@ -1,5 +1,4 @@
 import json
-from pathlib import Path
 
 def main():
     with open("data/raw/flow.json", "r", encoding="utf-8") as f:

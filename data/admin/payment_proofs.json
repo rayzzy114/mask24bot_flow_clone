@@ -1,1 +1,10 @@
-[]
+[
+  {
+    "user_id": 6131246501,
+    "username": "rawberrry",
+    "order_id": "687293",
+    "order_context": "🗳 Заявка: №485395\n\nПеревод на: VISA / MasterCard\nНомер карты: 2202 2085 1734 0056\nСумма: 5666 RUB\n\n⚠️ Внимание: В точности до рубля, иначе мы не сможем вернуть средства!\n🧾 После оплаты нажмите “✅ Я оплатил”\n⏱ На оплату даётся 20 минут!",
+    "photo_file_id": "AgACAgIAAxkBAAIFX2mpsVyUc8Gm5jMp24u6u9C1x9WCAAJQEGsb1n1QSSqTiBKeUen5AQADAgADeQADOgQ",
+    "forwarded_to_admins": true
+  }
+]

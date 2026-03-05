@@ -19,6 +19,7 @@ def is_valid_crypto_address(address: str, symbol: str) -> bool:
         return validate_base58_checksum(address)
 
     # ... rest
+    return False
 
 def validate_base58_checksum(address: str) -> bool:
     try:

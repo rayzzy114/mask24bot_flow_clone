@@ -16,7 +16,6 @@ from aiogram.types import (
 if TYPE_CHECKING:
     from .storage import MediaStore
 
-from .tokens import action_token
 
 logger = logging.getLogger(__name__)
 

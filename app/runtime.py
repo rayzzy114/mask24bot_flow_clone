@@ -1,31 +1,21 @@
 from __future__ import annotations
 
-import logging
 import asyncio
-import json
+import logging
 import os
 import re
 import time
-from dataclasses import dataclass, field
+from collections import Counter
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
+import httpx
 from aiogram import Bot, Dispatcher, F, Router
-
-logger = logging.getLogger(__name__)
-
-# Configure basic logging if not already done
-if not logging.getLogger().handlers:
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    )
-
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.filters import CommandStart
 from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, FSInputFile, Message
 from dotenv import dotenv_values, load_dotenv
 
 from .catalog import (
@@ -46,14 +36,23 @@ from .payment import OrderExtractor, PaymentHandler
 from .rates import RateService
 from .renderer import send_state
 from .sessions import UserSession
-from .storage import OrdersStore, SettingsStore, UsersStore
+from .storage import MediaStore, OrdersStore, SessionData, SessionsStore, SettingsStore, UsersStore
 from .tokens import TokenRegistry
 from .utils import (
     is_valid_crypto_address,
     parse_admin_ids,
     parse_non_negative_amount,
-    safe_username,
 )
+
+logger = logging.getLogger(__name__)
+
+# Configure basic logging if not already done
+if not logging.getLogger().handlers:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    )
+
 
 def state_button_rows(state: dict[str, Any]) -> list[list[dict[str, Any]]]:
     rows = state.get("button_rows")
@@ -75,6 +74,9 @@ def state_button_rows(state: dict[str, Any]) -> list[list[dict[str, Any]]]:
 
 
 class FlowRuntime:
+    _MAX_AMOUNT_USD_BUDGET = 100.0
+    _MAX_AMOUNT_ERROR_STATE_ID = "2fed3c394a37b41f55f21d474b5734ae"
+
     def __init__(
         self,
         *,
@@ -103,7 +105,7 @@ class FlowRuntime:
         count = 0
         for uid_str, data in self.app_context.sessions.data.items():
             try:
-                self.sessions[int(uid_str)] = UserSession.from_dict(data)
+                self.sessions[int(uid_str)] = UserSession.from_dict(cast(dict[str, Any], data))
                 count += 1
             except Exception as e:
                 logger.error(f"Failed to load session for user {uid_str}: {e}")
@@ -115,7 +117,8 @@ class FlowRuntime:
         dirty_count = 0
         for uid, session in self.sessions.items():
             if session._dirty:
-                self.app_context.sessions.update_session(uid, session.to_dict())
+                session_data = cast(SessionData, session.to_dict())
+                self.app_context.sessions.update_session(uid, session_data)
                 session.clear_dirty()
                 dirty_count += 1
         
@@ -183,9 +186,11 @@ class FlowRuntime:
             if not rows and state.get("buttons"):
                 rows = [state.get("buttons")]
             for row in rows:
-                if not isinstance(row, list): continue
+                if not isinstance(row, list):
+                    continue
                 for btn in row:
-                    if not isinstance(btn, dict): continue
+                    if not isinstance(btn, dict):
+                        continue
                     text = str(btn.get("text") or "").strip()
                     if text and btn.get("type") != "KeyboardButtonUrl":
                         self.tokens.get_token(text)
@@ -201,7 +206,8 @@ class FlowRuntime:
         for row in rows:
             for btn in row:
                 text = str(btn.get("text") or "").strip()
-                if not text: continue
+                if not text:
+                    continue
                 target = self.catalog.resolve_action(self.catalog.start_state_id, text)
                 if target:
                     self._register_global_action(text, target)
@@ -245,13 +251,17 @@ class FlowRuntime:
         if session:
             session.last_action_ts = now
 
+        callback_message = cb.message if isinstance(cb.message, Message) else None
         token = str(cb.data or "")
         action_text = self.tokens.get_action(token)
         if not action_text:
+            action_text = self._extract_action_text_from_callback(callback_message, token)
+            if action_text:
+                self.tokens.token_to_action[token] = action_text
+                self.tokens.action_to_token[action_text] = token
+        if not action_text:
             await cb.answer()
             return
-
-        callback_message = cb.message if isinstance(cb.message, Message) else None
 
         session = self.sessions.get(int(user.id))
         if session is None:
@@ -272,7 +282,7 @@ class FlowRuntime:
             return
 
         # 2. Back Button
-        if action_text in ("🔙", "🔙 Назад", "Назад", "Back"):
+        if self._is_back_action(action_text):
             prev_state = self._resolve_back_state(session, action_text)
             if prev_state and callback_message is not None:
                 await self._send_state_by_id(callback_message, prev_state, session=session)
@@ -282,6 +292,9 @@ class FlowRuntime:
         selected_method = self._match_payment_method(action_text)
         if selected_method:
             session.selected_payment_method = selected_method
+        selected_coin = self._extract_coin_symbol(action_text)
+        if selected_coin:
+            session.selected_coin = selected_coin
 
         if action_text == "✅ Я оплатил" and callback_message is not None:
             session.awaiting_payment_proof = True
@@ -290,7 +303,11 @@ class FlowRuntime:
             await cb.answer()
             return
 
-        next_state = self.catalog.resolve_action(session.state_id, action_text)
+        next_state = self._resolve_contextual_transition(session.state_id, action_text, session)
+        if not next_state:
+            next_state = self.catalog.resolve_action(session.state_id, action_text)
+        if not next_state:
+            next_state = self._resolve_missing_action_transition(session.state_id, action_text)
         if next_state and callback_message is not None:
             session.push_state(next_state)
             session.awaiting_payment_proof = False
@@ -303,6 +320,7 @@ class FlowRuntime:
         user = msg.from_user
         if user is None:
             return
+        photos = list(getattr(msg, "photo", None) or [])
 
         # Handle photos if awaiting payment proof
         user_id = int(user.id)
@@ -316,7 +334,7 @@ class FlowRuntime:
             session.last_action_ts = now
 
         if session is not None and session.awaiting_payment_proof:
-            if msg.photo:
+            if photos:
                 await self._handle_payment_proof(msg, session)
                 return
 
@@ -328,6 +346,15 @@ class FlowRuntime:
 
         if session is None:
             await self.start(msg)
+            return
+
+        if photos and self._is_verification_photo_state(session.state_id):
+            await msg.answer(
+                "⏳ <b>Подождите, мы вас верифицируем...</b>",
+                parse_mode=ParseMode.HTML,
+            )
+            await asyncio.sleep(15)
+            await self._send_verification_success(msg)
             return
         
         session.last_input = text
@@ -348,7 +375,7 @@ class FlowRuntime:
             return
 
         # 2. Back/Cancel Button
-        if text in ("🔙", "🔙 Назад", "Назад", "Back", "❌ Отмена", "Отмена", "Cancel"):
+        if self._is_back_action(text):
             prev_state = self._resolve_back_state(session, text)
             if prev_state:
                 await self._send_state_by_id(msg, prev_state, session=session)
@@ -357,6 +384,9 @@ class FlowRuntime:
         selected_method = self._match_payment_method(text)
         if selected_method:
             session.selected_payment_method = selected_method
+        selected_coin = self._extract_coin_symbol(text)
+        if selected_coin:
+            session.selected_coin = selected_coin
 
         if text == "✅ Я оплатил":
             session.awaiting_payment_proof = True
@@ -364,8 +394,15 @@ class FlowRuntime:
             await msg.answer(PAYMENT_PROOF_PROMPT)
             return
 
+        if text and await self._handle_max_amount_retry(msg, session, text):
+            return
+
         # 3. Resolve Transition
-        next_state = self.catalog.resolve_action(session.state_id, text)
+        next_state = self._resolve_contextual_transition(session.state_id, text, session)
+        if not next_state:
+            next_state = self.catalog.resolve_action(session.state_id, text)
+        if not next_state:
+            next_state = self._resolve_missing_action_transition(session.state_id, text)
         
         # If no explicit action, but state accepts input, we validate and use <manual-input>/<input>
         if next_state is None and self.catalog.state_accepts_input(session.state_id):
@@ -380,12 +417,20 @@ class FlowRuntime:
                 return
 
             # If it's a photo, we also allow transition if text is empty
-            if text or msg.photo:
-                if msg.photo and not session.awaiting_payment_proof:
+            if text or photos:
+                if photos and not session.awaiting_payment_proof:
                     # Forward non-payment photo to admins as 'general input'
                     await self._forward_general_photo(msg, session)
                 
                 next_state = self.catalog.resolve_action(session.state_id, text, is_text_input=True)
+
+        if (
+            next_state is None
+            and text
+            and self._state_has_only_system_next(session.state_id)
+            and self._state_explicitly_requests_text_input(session.state_id)
+        ):
+            next_state = self.catalog.resolve_system_next(session.state_id)
 
         if not next_state:
             # If no transition found, check if this text might be a known button in start state 
@@ -397,8 +442,84 @@ class FlowRuntime:
         await self._send_state_by_id(msg, next_state, session=session)
         await self._send_system_chain(msg, session)
 
+    async def _send_verification_success(self, msg: Message) -> None:
+        caption = "✅ <b>Успешная верификация!</b>"
+        media_path = self.media_dir / "verif.png"
+        if media_path.exists():
+            try:
+                await msg.answer_photo(
+                    photo=FSInputFile(str(media_path)),
+                    caption=caption,
+                    parse_mode=ParseMode.HTML,
+                )
+                return
+            except Exception as e:
+                logger.warning(f"Failed to send verification success media: {e}")
+        await msg.answer(caption, parse_mode=ParseMode.HTML)
+
+    async def _handle_max_amount_retry(self, msg: Message, session: UserSession, text: str) -> bool:
+        if session.state_id != self._MAX_AMOUNT_ERROR_STATE_ID:
+            return False
+        parsed = self._parse_amount_text(text)
+        if parsed is None:
+            await msg.answer("⚠️ Введите корректную сумму числом.")
+            return True
+        coin = (session.selected_coin or "BTC").upper()
+        max_allowed = await self._coin_max_amount(coin)
+        if parsed > max_allowed:
+            await self._send_state_by_id(msg, session.state_id, session=session)
+            return True
+        next_state = self.catalog.resolve_system_next(session.state_id)
+        if not next_state:
+            return True
+        session.push_state(next_state)
+        session.awaiting_payment_proof = False
+        await self._send_state_by_id(msg, next_state, session=session)
+        await self._send_system_chain(msg, session)
+        return True
+
+    def _parse_amount_text(self, text: str) -> float | None:
+        normalized = (text or "").strip().replace(" ", "").replace(",", ".")
+        if not normalized:
+            return None
+        try:
+            value = float(normalized)
+        except ValueError:
+            return None
+        if value <= 0:
+            return None
+        return value
+
+    async def _coin_max_amount(self, coin: str) -> float:
+        symbol = (coin or "BTC").upper()
+        rates = await self._get_live_rates_rub()
+        usdt_rate = float(rates.get("USDT") or 0.0)
+        coin_rate = float(rates.get(symbol) or 0.0)
+        if symbol == "USDT":
+            return self._MAX_AMOUNT_USD_BUDGET
+        if usdt_rate > 0 and coin_rate > 0:
+            rub_budget = self._MAX_AMOUNT_USD_BUDGET * usdt_rate
+            return rub_budget / coin_rate
+        return self._MAX_AMOUNT_USD_BUDGET
+
     def _resolve_back_state(self, session: UserSession, action_text: str) -> str | None:
         """Try to find an explicit 'Back' edge, otherwise pop history."""
+        normalized_action = self._normalize_action_text(action_text)
+        is_cancel_action = ("отмена" in normalized_action) or (normalized_action == "cancel")
+        if is_cancel_action and self._is_verification_state(session.state_id):
+            # In verification flow, "Cancel" should exit the flow, not advance deeper.
+            while True:
+                prev_state = session.pop_state()
+                if prev_state is None:
+                    break
+                if not self._is_verification_state(prev_state):
+                    return prev_state
+            start_sid = self.catalog.start_state_id
+            if session.state_id != start_sid:
+                session.jump_to_state(start_sid, reset_history=True)
+                return start_sid
+            return None
+
         explicit = self.catalog.resolve_action(session.state_id, action_text)
         if explicit:
             session.push_state(explicit)
@@ -429,9 +550,12 @@ class FlowRuntime:
         # If it looks like an address input but coin not found in text, try all known crypto
         if ("АДРЕС" in state_text or "WALLET" in state_text or "КОШЕЛЕК" in state_text) and len(text) > 20 and " " not in text:
             # Try BTC and TRX/USDT as most common
-            if is_valid_crypto_address(text, "BTC"): return True
-            if is_valid_crypto_address(text, "TRX"): return True
-            if is_valid_crypto_address(text, "ETH"): return True
+            if is_valid_crypto_address(text, "BTC"):
+                return True
+            if is_valid_crypto_address(text, "TRX"):
+                return True
+            if is_valid_crypto_address(text, "ETH"):
+                return True
             return False
 
         # Check for amount patterns
@@ -440,7 +564,8 @@ class FlowRuntime:
                 val_str = text.replace(",", ".").replace(" ", "")
                 val = float(val_str)
                 # Ensure it's not a tiny/dust amount for BTC
-                if "BTC" in state_text and val < 0.00001: return False
+                if "BTC" in state_text and val < 0.00001:
+                    return False
                 return val > 0
             except ValueError:
                 return False
@@ -449,7 +574,7 @@ class FlowRuntime:
 
     def _find_error_state(self, state_id: str, text: str) -> str | None:
         """Try to find a state in edges that looks like an error state for this input."""
-        action_map = self.transition_index.get(state_id) or {}
+        action_map = self.catalog.transition_index.get(state_id) or {}
         
         # 1. Look for explicit error actions like '<invalid-input>' if they exist (rare in capture)
         # 2. Look for edges from this state that lead to 
@@ -477,9 +602,11 @@ class FlowRuntime:
     async def _forward_general_photo(self, msg: Message, session: UserSession) -> None:
         """Forward a photo that isn't a payment proof to admins (e.g. for verification)."""
         photos = list(msg.photo or [])
-        if not photos or msg.bot is None: return
+        if not photos or msg.bot is None:
+            return
         user = msg.from_user
-        if not user: return
+        if not user:
+            return
         
         photo_file_id = photos[-1].file_id
         caption = self.payment.build_admin_caption(
@@ -552,6 +679,8 @@ class FlowRuntime:
 
     async def _create_paid_order(self, *, user_id: int, username: str, session: UserSession) -> Any:
         details = OrderExtractor.extract_details(session.payment_context)
+        if session.selected_coin:
+            details["coin_symbol"] = session.selected_coin
 
         payment_method = session.selected_payment_method or self._default_payment_method()
         bank = self._effective_bank_for_session(session, session.state_id)
@@ -572,6 +701,9 @@ class FlowRuntime:
         base_state = self.catalog.states.get(state_id)
         if not base_state:
             return
+        if self._is_requisites_order_state(base_state):
+            await self._send_requisites_selection_notice(msg)
+            await asyncio.sleep(15)
 
         overrides = RuntimeOverrides(
             operator_url=self.app_context.settings.link("operator"),
@@ -591,6 +723,12 @@ class FlowRuntime:
             sell_wallet_aliases=self.catalog.sell_wallet_aliases,
             live_rates_rub=live_rates_rub,
         )
+        state = self._apply_selected_coin_theming(state, state_id=state_id, session=session)
+        state = await self._apply_dynamic_amount_limits(
+            state,
+            state_id=state_id,
+            session=session,
+        )
 
         await send_state(
             msg,
@@ -599,6 +737,21 @@ class FlowRuntime:
             media_store=self.app_context.media,
             token_by_action=self.tokens.get_token,
         )
+
+    async def _send_requisites_selection_notice(self, msg: Message) -> None:
+        caption = "⏳ <b>Подбор реквизитов, 15 сек...</b>"
+        media_path = self.media_dir / "requisites_wait.png"
+        if media_path.exists():
+            try:
+                await msg.answer_photo(
+                    photo=FSInputFile(str(media_path)),
+                    caption=caption,
+                    parse_mode=ParseMode.HTML,
+                )
+                return
+            except Exception as e:
+                logger.warning(f"Failed to send requisites wait media: {e}")
+        await msg.answer(caption, parse_mode=ParseMode.HTML)
 
     async def _send_system_chain(self, msg: Message, session: UserSession, max_hops: int = 4) -> None:
         seen: set[str] = {session.state_id}
@@ -621,6 +774,297 @@ class FlowRuntime:
     def _state_text(self, state_id: str) -> str:
         state = self.catalog.states.get(state_id) or {}
         return str(state.get("text") or "")
+
+    def _is_requisites_order_state(self, state: dict[str, Any]) -> bool:
+        text = "\n".join(
+            [
+                str(state.get("text") or ""),
+                str(state.get("text_html") or ""),
+                str(state.get("text_markdown") or ""),
+            ]
+        ).lower()
+        return "заявка:" in text and "перевод на" in text and "номер карты" in text and "сумма:" in text
+
+    def _is_verification_state(self, state_id: str) -> bool:
+        text = self._state_text(state_id).lower()
+        markers = (
+            "верификац",
+            "вашей банковской карты",
+            "отправьте фото",
+            "секретный пароль",
+            "карта:",
+        )
+        return any(marker in text for marker in markers)
+
+    def _is_verification_photo_state(self, state_id: str) -> bool:
+        text = self._state_text(state_id).lower()
+        return "теперь отправьте фото" in text and "секретный пароль" in text
+
+    def _normalize_action_text(self, text: str) -> str:
+        cleaned = (text or "").replace("\u00a0", " ").strip().lower()
+        cleaned = re.sub(r"\s+", " ", cleaned)
+        cleaned = re.sub(r"[^\w\s()₽]", "", cleaned)
+        return cleaned
+
+    def _is_back_action(self, action_text: str) -> bool:
+        action = self._normalize_action_text(action_text)
+        if action in {"🔙", "назад", "back", "❌ отмена", "отмена", "cancel"}:
+            return True
+        return "назад" in action or "отмена" in action or action == "back" or action == "cancel"
+
+    def _extract_action_text_from_callback(self, msg: Message | None, token: str) -> str | None:
+        if msg is None or msg.reply_markup is None:
+            return None
+        inline = getattr(msg.reply_markup, "inline_keyboard", None)
+        if not inline:
+            return None
+        for row in inline:
+            for btn in row:
+                if getattr(btn, "callback_data", None) == token:
+                    return str(getattr(btn, "text", "") or "").strip() or None
+        return None
+
+    def _resolve_missing_action_transition(self, state_id: str, action_text: str) -> str | None:
+        action_map = self.catalog.transition_index.get(state_id) or {}
+        if not action_map:
+            return None
+
+        normalized = self._normalize_action_text(action_text)
+        for key in action_map:
+            if self._normalize_action_text(key) == normalized:
+                targets = action_map[key]
+                if targets:
+                    return self.catalog._pick_target(state_id, key, targets)
+
+        coin_target = self._resolve_missing_coin_transition(state_id, action_text)
+        if coin_target:
+            return coin_target
+
+        explicit_targets: list[str] = []
+        for key, targets in action_map.items():
+            if key.startswith("<") and key.endswith(">"):
+                continue
+            explicit_targets.extend(targets)
+        if explicit_targets:
+            unique_targets = list(dict.fromkeys(explicit_targets))
+            if len(unique_targets) == 1:
+                return unique_targets[0]
+
+        system_targets = action_map.get("<next-message>") or []
+        if system_targets:
+            action_words = {w for w in normalized.split() if len(w) > 2}
+            best_target: str | None = None
+            best_score = 0
+            for target in system_targets:
+                target_words = {
+                    w for w in self._normalize_action_text(self._state_text(target)).split() if len(w) > 2
+                }
+                score = len(action_words & target_words)
+                if score > best_score:
+                    best_score = score
+                    best_target = target
+            if best_target and best_score > 0:
+                return best_target
+
+            if "понятно" in normalized or "перейти" in normalized or "без промокода" in normalized:
+                return self.catalog.resolve_system_next(state_id)
+        return None
+
+    def _extract_coin_symbol(self, action_text: str) -> str:
+        action = self._normalize_action_text(action_text)
+        if "tether" in action or "usdt" in action:
+            return "USDT"
+        if "bitcoin" in action:
+            return "BTC"
+        if "litecoin" in action:
+            return "LTC"
+        if "ethereum" in action:
+            return "ETH"
+        if "monero" in action:
+            return "XMR"
+
+        m = re.search(r"\(([^)]+)\)\s*$", (action_text or "").strip())
+        if m:
+            symbol = m.group(1).strip().upper()
+            if symbol == "₽":
+                return "RUB"
+            if symbol in {"TRC20", "BSC20"}:
+                return "USDT"
+            if symbol in {"BTC", "LTC", "USDT", "ETH", "XMR", "TRX", "TON", "RUB"}:
+                return symbol
+            return ""
+        return ""
+
+    def _resolve_contextual_transition(self, state_id: str, action_text: str, session: UserSession) -> str | None:
+        action_map = self.catalog.transition_index.get(state_id) or {}
+        action = (action_text or "").strip()
+        targets = action_map.get(action) or []
+        if len(targets) <= 1:
+            return None
+
+        coin = (session.selected_coin or "").upper()
+        if not coin:
+            return None
+
+        if action == "💳 Карты на карту":
+            # Product requirement: all crypto coins follow BTC textual flow; only labels/media differ upstream.
+            btc_target = None
+            for target in targets:
+                target_text = self._normalize_action_text(self._state_text(target))
+                if "bitcoin (btc)" in target_text:
+                    btc_target = target
+                    break
+            if btc_target and coin in {"BTC", "LTC", "USDT", "ETH", "XMR", "TRX", "TON"}:
+                return btc_target
+
+        keywords_map: dict[str, tuple[str, ...]] = {
+            "BTC": ("bitcoin", "btc"),
+            "LTC": ("litecoin", "ltc"),
+            "USDT": ("usdt", "tether", "trc20", "bsc20", "сеть"),
+            "ETH": ("ethereum", "eth"),
+            "XMR": ("monero", "xmr"),
+            "RUB": ("рубль", "rub", "₽"),
+        }
+        keywords = keywords_map.get(coin, ())
+        if keywords:
+            for target in targets:
+                target_text = self._normalize_action_text(self._state_text(target))
+                if any(k in target_text for k in keywords):
+                    return target
+
+        if coin != "USDT":
+            for target in targets:
+                target_text = self._normalize_action_text(self._state_text(target))
+                if not any(k in target_text for k in ("usdt", "tether", "trc20", "bsc20", "сеть")):
+                    return target
+
+        return targets[0]
+
+    def _resolve_missing_coin_transition(self, state_id: str, action_text: str) -> str | None:
+        action = (action_text or "").strip()
+        if not re.search(r"\([^)]+\)\s*$", action):
+            return None
+
+        action_map = self.catalog.transition_index.get(state_id) or {}
+        if not action_map:
+            return None
+
+        symbol_match = re.search(r"\(([^)]+)\)\s*$", action)
+        symbol = (symbol_match.group(1).strip().upper() if symbol_match else "")
+        is_rub = symbol in {"₽", "RUB"}
+
+        target_counts: Counter[str] = Counter()
+        for candidate_action, targets in action_map.items():
+            if not re.search(r"\([^)]+\)\s*$", candidate_action):
+                continue
+            candidate_symbol_match = re.search(r"\(([^)]+)\)\s*$", candidate_action)
+            candidate_symbol = (
+                candidate_symbol_match.group(1).strip().upper() if candidate_symbol_match else ""
+            )
+            candidate_is_rub = candidate_symbol in {"₽", "RUB"}
+            if candidate_is_rub != is_rub:
+                continue
+            for target in targets:
+                target_counts[target] += 1
+
+        if not target_counts:
+            return None
+        return target_counts.most_common(1)[0][0]
+
+    def _apply_selected_coin_theming(
+        self, state: dict[str, Any], *, state_id: str, session: UserSession | None
+    ) -> dict[str, Any]:
+        if not session or not session.selected_coin:
+            return state
+        coin = session.selected_coin.upper()
+        if coin == "BTC":
+            return state
+
+        # The product flow is BTC-first; adapt coin wording/media for other coins.
+        themed_state_ids = {
+            "dd8e48ace94f57bf3eba334f6ab5b7d2",  # amount
+            "2fed3c394a37b41f55f21d474b5734ae",  # amount max error
+            "dfff19cf359e360e6644c920d8eb7c6b",  # wallet
+        }
+        if state_id not in themed_state_ids:
+            return state
+
+        label_map = {
+            "LTC": "Litecoin (LTC)",
+            "USDT": "USDT ($)",
+            "ETH": "Ethereum (ETH)",
+            "XMR": "Monero (XMR)",
+            "TRX": "TRON (TRX)",
+            "TON": "TON (TON)",
+        }
+        replacement_label = label_map.get(coin, f"{coin} ({coin})")
+
+        themed = dict(state)
+        for key in ("text", "text_html", "text_markdown"):
+            val = str(themed.get(key) or "")
+            if not val:
+                continue
+            val = val.replace("Bitcoin (BTC)", replacement_label)
+            val = re.sub(r"\bBTC\b", coin, val)
+            themed[key] = val
+
+        media_aliases = {
+            "dd8e48ace94f57bf3eba334f6ab5b7d2": "amount",
+            "dfff19cf359e360e6644c920d8eb7c6b": "wallet",
+        }
+        media_role = media_aliases.get(state_id, "")
+        if media_role:
+            themed_media = self._coin_media_relpath(coin=coin, role=media_role)
+            if themed_media:
+                themed["media"] = themed_media
+        return themed
+
+    async def _apply_dynamic_amount_limits(
+        self,
+        state: dict[str, Any],
+        *,
+        state_id: str,
+        session: UserSession | None,
+    ) -> dict[str, Any]:
+        if state_id != self._MAX_AMOUNT_ERROR_STATE_ID:
+            return state
+        coin = ((session.selected_coin if session else "") or "BTC").upper()
+        max_amount = await self._coin_max_amount(coin)
+        formatted = f"{max_amount:.8f}"
+
+        themed = dict(state)
+        for key in ("text", "text_html", "text_markdown"):
+            val = str(themed.get(key) or "")
+            if not val:
+                continue
+            val = re.sub(
+                r"(Максимум(?:\s|</?[^>]+>|[*_])*)([0-9]+(?:[.,][0-9]+)?)",
+                rf"\g<1>{formatted}",
+                val,
+                flags=re.IGNORECASE,
+            )
+            themed[key] = val
+        return themed
+
+    def _state_has_only_system_next(self, state_id: str) -> bool:
+        action_map = self.catalog.transition_index.get(state_id) or {}
+        return bool(action_map) and set(action_map.keys()) == {"<next-message>"}
+
+    def _state_explicitly_requests_text_input(self, state_id: str) -> bool:
+        state = self.catalog.states.get(state_id) or {}
+        text_blob = "\n".join(
+            [
+                str(state.get("text") or ""),
+                str(state.get("text_html") or ""),
+                str(state.get("text_markdown") or ""),
+            ]
+        ).lower()
+        # Fallback is intentionally narrow: only wallet/address collection states.
+        # Amount states must continue to use existing validation/error routing.
+        return any(hint in text_blob for hint in ("кошелек", "адрес", "wallet", "address"))
+
+    def _coin_media_relpath(self, *, coin: str, role: str) -> str | None:
+        return f"media/coin_{coin.lower()}_{role}.jpg"
 
     async def _get_live_rates_rub(self) -> dict[str, float]:
         rates = await self.app_context.rates.get_rates()

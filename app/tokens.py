@@ -1,5 +1,4 @@
 import hashlib
-from typing import Callable
 
 
 def action_token(action_text: str) -> str:

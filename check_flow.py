@@ -1,6 +1,5 @@
 import json
 from pathlib import Path
-from typing import Any
 
 def main():
     raw_dir = Path("data/raw")

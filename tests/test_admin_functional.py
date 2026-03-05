@@ -1,9 +1,6 @@
 import pytest
-from unittest.mock import MagicMock, patch
-from pathlib import Path
-from dotenv import dotenv_values
+from unittest.mock import MagicMock
 
-from app.handlers.admin import build_admin_router
 from app.context import AppContext
 from app.storage import SettingsStore, UsersStore, OrdersStore, SessionsStore, MediaStore
 from app.rates import RateService
