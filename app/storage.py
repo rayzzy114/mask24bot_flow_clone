@@ -106,6 +106,7 @@ class SettingsStore:
 
     def load(self) -> None:
         if not self.path.exists():
+            self._normalize_split_map()
             self.save_sync()
             return
         try:
@@ -260,6 +261,7 @@ class SettingsStore:
         bank = bank.strip()
         if not bank:
             return
+        self._normalize_split_map()
         self.data["requisites"]["single_bank"] = bank
         if self.requisites_mode == "single":
             for method in self.data["requisites"]["payment_methods"]:
@@ -270,6 +272,7 @@ class SettingsStore:
         value = value.strip()
         if not value:
             return
+        self._normalize_split_map()
         self.data["requisites"]["single_value"] = value
         if self.requisites_mode == "single":
             for method in self.data["requisites"]["payment_methods"]:

@@ -300,6 +300,12 @@ class FlowRuntime:
                 await cb.answer()
                 return
 
+        if callback_message is not None and await self._handle_zero_balance_send_notice(
+            callback_message, session, action_text
+        ):
+            await cb.answer()
+            return
+
         selected_method = self._match_payment_method(action_text)
         if selected_method:
             session.selected_payment_method = selected_method
@@ -390,6 +396,9 @@ class FlowRuntime:
             if prev_state:
                 await self._send_state_by_id(msg, prev_state, session=session)
                 return
+
+        if text and await self._handle_zero_balance_send_notice(msg, session, text):
+            return
 
         selected_method = self._match_payment_method(text)
         if selected_method:
@@ -1303,6 +1312,18 @@ class FlowRuntime:
             if method.lower() == action:
                 return method
         return ""
+
+    async def _handle_zero_balance_send_notice(
+        self, msg: Message, session: UserSession, action_text: str
+    ) -> bool:
+        if session.state_id != "4dd498fb2857472407baa8a4e213d9d9":
+            return False
+        if (action_text or "").strip() != "📤 Отправить":
+            return False
+        await msg.answer(
+            "⚠️ Баланс нулевой. Отправить ничего нельзя.\n\nПополните баланс, чтобы отправить BTC."
+        )
+        return True
 
     def _default_payment_method(self) -> str:
         methods = self.app_context.settings.payment_methods()

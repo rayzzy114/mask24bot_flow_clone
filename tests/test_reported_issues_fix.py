@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 from pathlib import Path
-from aiogram.types import Message, User
+from aiogram.types import CallbackQuery, Message, User
 from aiogram.enums import ParseMode
 
 from app.runtime import FlowRuntime, UserSession
@@ -237,6 +237,62 @@ async def test_verification_photo_state_rejects_text_without_photo(runtime_ctx):
 
     assert session.state_id == verify_photo_state
     msg.answer.assert_awaited_once_with("⚠️ На этом шаге нужно отправить именно фото карты с листком и паролем.")
+    runtime._send_state_by_id.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_zero_balance_send_shows_replenish_notice_and_stays_put(runtime_ctx):
+    runtime, _ = runtime_ctx
+    zero_balance_wallet_state = "4dd498fb2857472407baa8a4e213d9d9"
+    session = UserSession(
+        state_id=zero_balance_wallet_state,
+        history=[runtime.catalog.start_state_id, zero_balance_wallet_state],
+    )
+    runtime.sessions[999] = session
+
+    msg = MagicMock(spec=Message)
+    msg.from_user = User(id=999, is_bot=False, first_name="Tester")
+    msg.text = "📤 Отправить"
+    msg.photo = []
+    msg.answer = AsyncMock()
+    runtime._send_state_by_id = AsyncMock()
+
+    await runtime.on_message(msg)
+
+    assert session.state_id == zero_balance_wallet_state
+    msg.answer.assert_awaited_once_with(
+        "⚠️ Баланс нулевой. Отправить ничего нельзя.\n\nПополните баланс, чтобы отправить BTC."
+    )
+    runtime._send_state_by_id.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_zero_balance_send_callback_shows_replenish_notice_and_stays_put(runtime_ctx):
+    runtime, _ = runtime_ctx
+    zero_balance_wallet_state = "4dd498fb2857472407baa8a4e213d9d9"
+    session = UserSession(
+        state_id=zero_balance_wallet_state,
+        history=[runtime.catalog.start_state_id, zero_balance_wallet_state],
+    )
+    runtime.sessions[999] = session
+    runtime._send_state_by_id = AsyncMock()
+    runtime.tokens.token_to_action["send_zero_token"] = "📤 Отправить"
+
+    callback_message = MagicMock(spec=Message)
+    callback_message.answer = AsyncMock()
+
+    cb = MagicMock(spec=CallbackQuery)
+    cb.from_user = User(id=999, is_bot=False, first_name="Tester")
+    cb.data = "send_zero_token"
+    cb.message = callback_message
+    cb.answer = AsyncMock()
+
+    await runtime.on_callback(cb)
+
+    assert session.state_id == zero_balance_wallet_state
+    callback_message.answer.assert_awaited_once_with(
+        "⚠️ Баланс нулевой. Отправить ничего нельзя.\n\nПополните баланс, чтобы отправить BTC."
+    )
     runtime._send_state_by_id.assert_not_awaited()
 
 
