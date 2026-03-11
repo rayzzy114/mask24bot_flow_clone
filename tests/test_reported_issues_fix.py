@@ -534,10 +534,13 @@ async def test_verification_photo_sends_delayed_success_media(runtime_ctx, monke
     await runtime.on_message(msg)
 
     runtime._forward_general_photo.assert_not_awaited()
-    msg.answer.assert_awaited_once_with(
-        "⏳ <b>Подождите, мы вас верифицируем...</b>",
-        parse_mode=ParseMode.HTML,
-    )
+    # Step 1: acceptance message sent immediately (naproverk.jpg absent → plain answer)
+    msg.answer.assert_awaited_once()
+    accept_call_text = msg.answer.await_args.args[0]
+    assert "Заявка на верификацию принята" in accept_call_text
+    assert "2200 1234 5678 9012" in accept_call_text
+    assert "рассмотрена в ближайшее время" in accept_call_text
+    # Step 2: 15s delay then success photo
     sleep_mock.assert_awaited_once_with(15)
     msg.answer_photo.assert_awaited_once()
     assert msg.answer_photo.await_args is not None
