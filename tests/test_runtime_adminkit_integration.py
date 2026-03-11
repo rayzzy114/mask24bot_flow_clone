@@ -171,6 +171,8 @@ async def test_send_state_by_id_applies_admin_overrides_in_runtime_pipeline(tmp_
 
     await ctx.settings.set_link("operator", "https://t.me/runtime_operator_777")
     await ctx.settings.set_link("terms", "https://example.com/runtime-terms")
+    await ctx.settings.set_link("support_ticket", "https://t.me/runtime_ticket_777")
+    await ctx.settings.set_link("wallet_help", "https://example.com/runtime-wallet-help")
     await ctx.settings.set_sell_wallet("ltc", "LTCRuntimeWallet111111111111111111111111111")
     await ctx.settings.set_requisites_value("1111 2222 3333 4444")
 
@@ -187,7 +189,11 @@ async def test_send_state_by_id_applies_admin_overrides_in_runtime_pipeline(tmp_
         raise AssertionError("Expected matching state in captured flow")
 
     terms_aliases = set(catalog.link_url_aliases.get("terms", ()))
+    support_ticket_aliases = set(catalog.link_url_aliases.get("support_ticket", ()))
+    wallet_help_aliases = set(catalog.link_url_aliases.get("wallet_help", ()))
     assert terms_aliases
+    assert support_ticket_aliases
+    assert wallet_help_aliases
 
     terms_state_id = _find_state_id(
         lambda state: any(
@@ -197,6 +203,34 @@ async def test_send_state_by_id_applies_admin_overrides_in_runtime_pipeline(tmp_
         )
         or any(
             str(btn.get("url") or "") in terms_aliases
+            for row in (state.get("button_rows") or [])
+            if isinstance(row, list)
+            for btn in row
+            if isinstance(btn, dict)
+        )
+    )
+    support_ticket_state_id = _find_state_id(
+        lambda state: any(
+            str(link) in support_ticket_aliases
+            for link in (state.get("text_links") or [])
+            if isinstance(link, str)
+        )
+        or any(
+            str(btn.get("url") or "") in support_ticket_aliases
+            for row in (state.get("button_rows") or [])
+            if isinstance(row, list)
+            for btn in row
+            if isinstance(btn, dict)
+        )
+    )
+    wallet_help_state_id = _find_state_id(
+        lambda state: any(
+            str(link) in wallet_help_aliases
+            for link in (state.get("text_links") or [])
+            if isinstance(link, str)
+        )
+        or any(
+            str(btn.get("url") or "") in wallet_help_aliases
             for row in (state.get("button_rows") or [])
             if isinstance(row, list)
             for btn in row
@@ -245,6 +279,42 @@ async def test_send_state_by_id_applies_admin_overrides_in_runtime_pipeline(tmp_
                 if isinstance(btn, dict) and btn.get("url"):
                     terms_urls.add(str(btn["url"]))
     assert "https://example.com/runtime-terms" in terms_urls
+
+    await runtime._send_state_by_id(
+        msg,
+        support_ticket_state_id,
+        session=UserSession(state_id=support_ticket_state_id),
+    )
+    support_ticket_state = send_state_mock.await_args_list[-1].args[1]
+    support_ticket_urls = {
+        str(link)
+        for link in (support_ticket_state.get("text_links") or [])
+        if isinstance(link, str)
+    }
+    for row in support_ticket_state.get("button_rows") or []:
+        if isinstance(row, list):
+            for btn in row:
+                if isinstance(btn, dict) and btn.get("url"):
+                    support_ticket_urls.add(str(btn["url"]))
+    assert "https://t.me/runtime_ticket_777" in support_ticket_urls
+
+    await runtime._send_state_by_id(
+        msg,
+        wallet_help_state_id,
+        session=UserSession(state_id=wallet_help_state_id),
+    )
+    wallet_help_state = send_state_mock.await_args_list[-1].args[1]
+    wallet_help_urls = {
+        str(link)
+        for link in (wallet_help_state.get("text_links") or [])
+        if isinstance(link, str)
+    }
+    for row in wallet_help_state.get("button_rows") or []:
+        if isinstance(row, list):
+            for btn in row:
+                if isinstance(btn, dict) and btn.get("url"):
+                    wallet_help_urls.add(str(btn["url"]))
+    assert "https://example.com/runtime-wallet-help" in wallet_help_urls
 
     await runtime._send_state_by_id(
         msg,

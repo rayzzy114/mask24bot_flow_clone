@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 from typing import Any
 from urllib.parse import urlparse
 
+from .constants import LINK_LABELS
+
 CARD_RE = re.compile(r"\b\d{4}(?:[ \-]?\d{4}){3}\b")
 RATE_LINE_HINTS = ("курс покупки", "курс продажи", "по курсу")
 PAYMENT_LINE_HINTS = ("к оплате", "с учетом скидки")
@@ -375,21 +377,51 @@ def _patch_buttons(
     requisites_value: str,
     detected_requisites: tuple[str, ...],
 ) -> None:
+    def button_link_key(text: str) -> str | None:
+        lowered = (text or "").strip().lower()
+        if not lowered:
+            return None
+        if "ᴡᴀʟʟᴇᴛ" in lowered or "support wallet" in lowered:
+            return "support_wallet"
+        if "создать тикет" in lowered or "тикет" in lowered or "ticket" in lowered:
+            return "support_ticket"
+        if "что такое кошелек" in lowered or "что такое кошелёк" in lowered:
+            return "wallet_help"
+        if "кошелек" in lowered or "кошелёк" in lowered:
+            return "wallet_help"
+        if "оператор" in lowered or "support" in lowered or "поддерж" in lowered:
+            return "operator"
+        for key, label in LINK_LABELS.items():
+            if label.lower() in lowered:
+                return key
+        return None
+
     def patch_button(btn: dict[str, Any]) -> None:
         url = str(btn.get("url") or "")
+        text = btn.get("text")
+        button_key = button_link_key(str(text or ""))
+        if url and button_key and button_key in link_overrides:
+            replacement = normalize_operator_url(link_overrides.get(button_key, ""))
+            if replacement:
+                btn["url"] = replacement
+                url = replacement
         if target_operator_url:
             if url and _is_same_url(url, operator_url_aliases):
-                btn["url"] = target_operator_url
-                url = target_operator_url
+                if button_key not in {"support_ticket", "support_wallet"}:
+                    btn["url"] = target_operator_url
+                    url = target_operator_url
         if url and link_overrides and link_url_aliases:
-            btn["url"] = _replace_single_link_url(
-                url,
-                link_overrides=link_overrides,
-                link_url_aliases=link_url_aliases,
-                skip_keys={"operator"},
-            )
+            if not (
+                button_key in {"support_ticket", "support_wallet"}
+                and btn.get("url") == link_overrides.get(button_key)
+            ):
+                btn["url"] = _replace_single_link_url(
+                    url,
+                    link_overrides=link_overrides,
+                    link_url_aliases=link_url_aliases,
+                    skip_keys={"operator"},
+                )
 
-        text = btn.get("text")
         if isinstance(text, str) and text:
             value = text
             if target_operator_handle:

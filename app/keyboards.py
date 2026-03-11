@@ -17,27 +17,23 @@ def kb_admin_order_confirm(order_id: str) -> InlineKeyboardMarkup:
 
 
 def kb_admin_panel(commission_percent: float) -> InlineKeyboardMarkup:
+    link_keys = list(LINK_LABELS.keys())
+    link_rows = []
+    for index in range(0, len(link_keys), 2):
+        row_keys = link_keys[index : index + 2]
+        link_rows.append(
+            [
+                InlineKeyboardButton(text=LINK_LABELS[key], callback_data=f"admin:set_link:{key}")
+                for key in row_keys
+            ]
+        )
+
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text=f"Комиссия: {commission_percent:.2f}%", callback_data="admin:set_commission")],
             [InlineKeyboardButton(text="💳 Управление реквизитами", callback_data="admin:requisites")],
             [InlineKeyboardButton(text="⚙️ ENV KEY=VALUE", callback_data="admin:set_env")],
-            [
-                InlineKeyboardButton(text="FAQ", callback_data="admin:set_link:faq"),
-                InlineKeyboardButton(text="Канал", callback_data="admin:set_link:channel"),
-            ],
-            [
-                InlineKeyboardButton(text="Чат", callback_data="admin:set_link:chat"),
-                InlineKeyboardButton(text="Отзывы", callback_data="admin:set_link:reviews"),
-            ],
-            [
-                InlineKeyboardButton(text="Отзыв-форма", callback_data="admin:set_link:review_form"),
-                InlineKeyboardButton(text="Менеджер", callback_data="admin:set_link:manager"),
-            ],
-            [
-                InlineKeyboardButton(text="Оператор", callback_data="admin:set_link:operator"),
-                InlineKeyboardButton(text="Условия", callback_data="admin:set_link:terms"),
-            ],
+            *link_rows,
             [InlineKeyboardButton(text="🪙 Кошельки продажи", callback_data="admin:sell_wallets")],
         ]
     )

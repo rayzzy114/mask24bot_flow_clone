@@ -1057,6 +1057,44 @@ def test_payment_proof_texts_use_bold_and_administrator_wording():
 
 
 @pytest.mark.asyncio
+async def test_quote_agree_shows_short_requisites_search_before_order_state(runtime_ctx, monkeypatch):
+    runtime, _ = runtime_ctx
+    quote_state_id = "d600074b23116f8c1024a7916d46d43e"
+    order_state_id = "c470c94e034f1631e0c841615c07c46b"
+    session = UserSession(
+        state_id=quote_state_id,
+        history=[runtime.catalog.start_state_id, quote_state_id],
+        selected_coin="USDT",
+        selected_payment_method="Перевод на карту",
+    )
+    session.last_action_ts = 0.0
+    runtime.sessions[999] = session
+    runtime._send_state_by_id = AsyncMock()
+    runtime._send_system_chain = AsyncMock()
+    runtime._send_requisites_selection_notice = AsyncMock()
+    runtime.tokens.token_to_action["agree_quote_token"] = "✅ Согласен"
+
+    sleep_mock = AsyncMock()
+    monkeypatch.setattr("app.runtime.asyncio.sleep", sleep_mock)
+    monkeypatch.setattr("app.runtime.random.randint", MagicMock(return_value=7))
+
+    callback_message = MagicMock(spec=Message)
+    callback_message.answer = AsyncMock()
+
+    cb = MagicMock(spec=CallbackQuery)
+    cb.from_user = User(id=999, is_bot=False, first_name="Tester")
+    cb.data = "agree_quote_token"
+    cb.message = callback_message
+    cb.answer = AsyncMock()
+
+    await runtime.on_callback(cb)
+
+    runtime._send_requisites_selection_notice.assert_awaited_once_with(callback_message)
+    sleep_mock.assert_awaited_once_with(7)
+    runtime._send_state_by_id.assert_awaited_with(callback_message, order_state_id, session=session)
+
+
+@pytest.mark.asyncio
 async def test_order_state_skips_wait_notice_and_uses_copyable_payment_format(runtime_ctx, monkeypatch):
     runtime, _ = runtime_ctx
     order_state_id = "9ff74b9bf7f060310f1e52607e00c4b7"
@@ -1086,6 +1124,35 @@ async def test_order_state_skips_wait_notice_and_uses_copyable_payment_format(ru
     assert "Перевод BTC по адресу: bc1qga6mx70jx0uvfuk39eqpyyfwh9fsxzme75ckt7" in str(sent_state.get("text") or "")
     assert "<code>2200 0000 0000 0000</code>" in str(sent_state.get("text_html") or "")
     assert "<code>bc1qga6mx70jx0uvfuk39eqpyyfwh9fsxzme75ckt7</code>" in str(sent_state.get("text_html") or "")
+
+
+@pytest.mark.asyncio
+async def test_usdt_bsc_requisites_state_uses_same_runtime_order_format_as_btc(runtime_ctx, monkeypatch):
+    runtime, _ = runtime_ctx
+    order_state_id = "25ae85dcf0be92c8142533c4fc45d102"
+    session = UserSession(
+        state_id=order_state_id,
+        history=[runtime.catalog.start_state_id, order_state_id],
+        selected_coin="USDT",
+        selected_payment_method="Перевод на карту",
+    )
+    session.requested_coin_amount = 40.0
+    session.destination_wallet = "0x66eb0a02ecf0089fb068cc2f73a3138a2ad9156a6"
+    runtime.app_context.settings.data["requisites"]["single_value"] = "7777 7777 7777 7777"
+
+    msg = MagicMock(spec=Message)
+    msg.from_user = User(id=999, is_bot=False, first_name="Tester")
+    runtime._get_live_rates_rub = AsyncMock(return_value={"USDT": 79.0})
+    send_state_mock = AsyncMock()
+    monkeypatch.setattr("app.runtime.send_state", send_state_mock)
+
+    await runtime._send_state_by_id(msg, order_state_id, session=session)
+
+    sent_state = send_state_mock.await_args.args[1]
+    assert "Номер карты: 7777 7777 7777 7777" in str(sent_state.get("text") or "")
+    assert "Перевод USDT по адресу: 0x66eb0a02ecf0089fb068cc2f73a3138a2ad9156a6" in str(sent_state.get("text") or "")
+    assert "<code>7777 7777 7777 7777</code>" in str(sent_state.get("text_html") or "")
+    assert "<code>0x66eb0a02ecf0089fb068cc2f73a3138a2ad9156a6</code>" in str(sent_state.get("text_html") or "")
 
 
 @pytest.mark.asyncio

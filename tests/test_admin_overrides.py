@@ -29,8 +29,17 @@ def test_operator_override_global() -> None:
 
     replaced_in_buttons = 0
     replaced_in_text = 0
+    operator_button_candidates = 0
 
     for state in catalog.states.values():
+        for row in state.get("button_rows") or []:
+            for btn in row:
+                if not isinstance(btn, dict):
+                    continue
+                text = str(btn.get("text") or "").lower()
+                if "оператор" in text:
+                    operator_button_candidates += 1
+
         updated = apply_state_overrides(
             state=state,
             overrides=overrides,
@@ -54,7 +63,8 @@ def test_operator_override_global() -> None:
         if "@new_operator_777" in text_blob or "https://t.me/new_operator_777" in text_blob:
             replaced_in_text += 1
 
-    assert replaced_in_buttons > 0
+    if operator_button_candidates:
+        assert replaced_in_buttons > 0
     assert replaced_in_text > 0
 
 
@@ -154,3 +164,89 @@ def test_sell_wallet_override_global() -> None:
                 replaced_hits += 1
 
     assert replaced_hits > 0
+
+
+def test_support_ticket_button_prefers_its_own_override_over_operator() -> None:
+    catalog = _catalog()
+    target_state = None
+    for state in catalog.states.values():
+        for row in state.get("button_rows") or []:
+            if not isinstance(row, list):
+                continue
+            for btn in row:
+                if not isinstance(btn, dict):
+                    continue
+                if "создать тикет" in str(btn.get("text") or "").lower():
+                    target_state = state
+                    break
+            if target_state is not None:
+                break
+        if target_state is not None:
+            break
+
+    assert target_state is not None
+
+    updated = apply_state_overrides(
+        state=target_state,
+        overrides=RuntimeOverrides(
+            operator_url="https://t.me/new_operator_777",
+            payment_requisites="",
+            link_overrides={"support_ticket": "https://t.me/new_ticket_777"},
+        ),
+        operator_url_aliases=catalog.operator_url_aliases,
+        operator_handle_aliases=catalog.operator_handle_aliases,
+        detected_requisites=catalog.detected_requisites,
+        link_url_aliases=catalog.link_url_aliases,
+    )
+
+    urls = {
+        str(btn.get("url") or "")
+        for row in (updated.get("button_rows") or [])
+        if isinstance(row, list)
+        for btn in row
+        if isinstance(btn, dict) and btn.get("url")
+    }
+    assert "https://t.me/new_ticket_777" in urls
+
+
+def test_support_wallet_button_prefers_its_own_override_over_operator() -> None:
+    catalog = _catalog()
+    target_state = None
+    for state in catalog.states.values():
+        for row in state.get("button_rows") or []:
+            if not isinstance(row, list):
+                continue
+            for btn in row:
+                if not isinstance(btn, dict):
+                    continue
+                if "ᴡᴀʟʟᴇᴛ" in str(btn.get("text") or "").lower():
+                    target_state = state
+                    break
+            if target_state is not None:
+                break
+        if target_state is not None:
+            break
+
+    assert target_state is not None
+
+    updated = apply_state_overrides(
+        state=target_state,
+        overrides=RuntimeOverrides(
+            operator_url="https://t.me/new_operator_777",
+            payment_requisites="",
+            link_overrides={"support_wallet": "https://t.me/new_support_wallet_777"},
+        ),
+        operator_url_aliases=catalog.operator_url_aliases,
+        operator_handle_aliases=catalog.operator_handle_aliases,
+        detected_requisites=catalog.detected_requisites,
+        link_url_aliases=catalog.link_url_aliases,
+    )
+
+    urls = {
+        str(btn.get("url") or "")
+        for row in (updated.get("button_rows") or [])
+        if isinstance(row, list)
+        for btn in row
+        if isinstance(btn, dict) and btn.get("url")
+    }
+    assert "https://t.me/new_support_wallet_777" in urls

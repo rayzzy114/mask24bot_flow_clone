@@ -4,6 +4,7 @@ import asyncio
 import html
 import logging
 import os
+import random
 import re
 import time
 from collections import Counter
@@ -357,6 +358,7 @@ class FlowRuntime:
         if next_state and callback_message is not None:
             session.push_state(next_state)
             session.awaiting_payment_proof = False
+            await self._maybe_wait_before_requisites(callback_message, action_text, next_state)
             await self._send_state_by_id(callback_message, next_state, session=session)
             await self._send_system_chain(callback_message, session)
 
@@ -501,6 +503,7 @@ class FlowRuntime:
 
         session.push_state(next_state)
         session.awaiting_payment_proof = False
+        await self._maybe_wait_before_requisites(msg, text, next_state)
         await self._send_state_by_id(msg, next_state, session=session)
         await self._send_system_chain(msg, session)
 
@@ -1006,7 +1009,7 @@ class FlowRuntime:
         return patched
 
     async def _send_requisites_selection_notice(self, msg: Message) -> None:
-        caption = "⏳ <b>Подбор реквизитов, 15 сек...</b>"
+        caption = "🔎 <b>Поиск реквизитов...</b>\n\nПожалуйста, подождите 5-12 сек."
         media_path = self.media_dir / "requisites_wait.png"
         if media_path.exists():
             try:
@@ -1019,6 +1022,15 @@ class FlowRuntime:
             except Exception as e:
                 logger.warning(f"Failed to send requisites wait media: {e}")
         await msg.answer(caption, parse_mode=ParseMode.HTML)
+
+    async def _maybe_wait_before_requisites(self, msg: Message, action_text: str, next_state: str) -> None:
+        if (action_text or "").strip() != "✅ Согласен":
+            return
+        base_state = self.catalog.states.get(next_state)
+        if not base_state or not self._is_requisites_order_state(base_state):
+            return
+        await self._send_requisites_selection_notice(msg)
+        await asyncio.sleep(random.randint(5, 12))
 
     async def _send_system_chain(self, msg: Message, session: UserSession, max_hops: int = 4) -> None:
         seen: set[str] = {session.state_id}
@@ -1050,7 +1062,11 @@ class FlowRuntime:
                 str(state.get("text_markdown") or ""),
             ]
         ).lower()
-        return "заявка:" in text and "перевод на" in text and "номер карты" in text and "сумма:" in text
+        if "заявка:" in text and "перевод на" in text and "номер карты" in text and "сумма:" in text:
+            return True
+        if any(marker in text for marker in ("верификац", "секретный пароль", "отправьте фото", "карта:")):
+            return False
+        return bool(re.search(r"\b\d{4}(?:[ \-]?\d{4}){3}\b", text))
 
     def _is_runtime_quote_state(self, state: dict[str, Any]) -> bool:
         text = "\n".join(

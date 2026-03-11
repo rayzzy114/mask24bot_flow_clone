@@ -32,7 +32,23 @@ LINK_KEYWORDS: dict[str, tuple[str, ...]] = {
     "review_form": ("форма", "оставить отзыв", "review form"),
     "reviews": ("отзыв", "reviews", "review"),
     "manager": ("менеджер", "manager"),
+    "support_ticket": ("создать тикет", "тикет", "ticket"),
     "terms": ("услов", "terms"),
+    "wallet_help": ("что такое кошелек", "что такое кошелёк", "wallet", "кошелек", "кошелёк"),
+    "user_agreement": ("пользовательское соглашение",),
+    "getting_started": ("начало работы",),
+    "withdrawal_help": ("вывод средств",),
+    "pax_code_help": ("что такое pax-code", "что такое pax code", "pax-code", "pax code"),
+    "exchange_btc_help": ("как обменять bitcoin", "как обменять btc"),
+    "exchange_ltc_help": ("как обменять litecoin", "как обменять ltc"),
+    "exchange_usdt_help": ("как обменять tether", "как обменять usdt"),
+    "exchange_xmr_help": ("как обменять monero", "как обменять xmr"),
+    "promo_help": ("как активировать промокод", "промокод"),
+    "offer": ("оффер", "offer the mask"),
+    "finance": ("финансы",),
+    "charity_details": ("подробнее",),
+    "reports": ("отчеты", "отчёты", "reports"),
+    "support_wallet": ("support wallet",),
 }
 BTC_ADDRESS_RE = re.compile(r"\b(?:bc1|[13])[a-zA-HJ-NP-Z0-9]{20,}\b")
 ETH_ADDRESS_RE = re.compile(r"\b0x[a-fA-F0-9]{40}\b")
@@ -373,6 +389,31 @@ def _match_link_key(button_text: str) -> str | None:
     text = (button_text or "").strip().lower()
     if not text:
         return None
+    normalized_asciiish = text.translate(str.maketrans({"ᴜ": "u", "ᴘ": "p", "ᴏ": "o", "ʀ": "r", "ᴛ": "t"}))
+    if "ᴡᴀʟʟᴇᴛ" in text:
+        return "support_wallet"
+
+    for key in (
+        "support_ticket",
+        "wallet_help",
+        "user_agreement",
+        "getting_started",
+        "withdrawal_help",
+        "pax_code_help",
+        "exchange_btc_help",
+        "exchange_ltc_help",
+        "exchange_usdt_help",
+        "exchange_xmr_help",
+        "promo_help",
+        "offer",
+        "finance",
+        "charity_details",
+        "reports",
+        "support_wallet",
+    ):
+        for keyword in LINK_KEYWORDS.get(key, ()):
+            if keyword in text or keyword in normalized_asciiish:
+                return key
 
     if _is_operator_context(text):
         return "operator"
