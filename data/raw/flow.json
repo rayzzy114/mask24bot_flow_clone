@@ -3469,5 +3469,151 @@
     ],
     "media": null,
     "text_links": []
+  },
+  "0491b32aa93fbb577f1f8db1e6b06aca": {
+    "text": "Создается номер карты, ожидайте пару минут!",
+    "text_html": "Создается номер карты, ожидайте пару минут!",
+    "text_markdown": "Создается номер карты, ожидайте пару минут!",
+    "buttons": [],
+    "button_rows": [],
+    "media": null,
+    "text_links": []
+  },
+  "5954d5f545e39db15b4036cbbb8b5064": {
+    "text": "‼️ Для Вас обмен с минимальной комиссией!\n\nПройдите быструю верификацию и получите лучший курс обмена.\n\n✅ Верифицированные клиенты получают сниженную комиссию на все обмены!",
+    "text_html": "‼️ Для Вас обмен с минимальной комиссией!\n\nПройдите быструю верификацию и получите лучший курс обмена.\n\n✅ Верифицированные клиенты получают сниженную комиссию на все обмены!",
+    "text_markdown": "‼️ Для Вас обмен с минимальной комиссией!\n\nПройдите быструю верификацию и получите лучший курс обмена.\n\n✅ Верифицированные клиенты получают сниженную комиссию на все обмены!",
+    "buttons": [
+      {
+        "text": "✅ Пройти верификацию",
+        "type": "KeyboardButtonCallback",
+        "row": 0,
+        "col": 0
+      },
+      {
+        "text": "⏩ Пропустить",
+        "type": "KeyboardButtonCallback",
+        "row": 1,
+        "col": 0
+      }
+    ],
+    "button_rows": [
+      [
+        {
+          "text": "✅ Пройти верификацию",
+          "type": "KeyboardButtonCallback",
+          "row": 0,
+          "col": 0
+        }
+      ],
+      [
+        {
+          "text": "⏩ Пропустить",
+          "type": "KeyboardButtonCallback",
+          "row": 1,
+          "col": 0
+        }
+      ]
+    ],
+    "media": null,
+    "text_links": []
+  },
+  "aa26df710d36d58a503cac00d9966f40": {
+    "text": "🔄 Выберите валюту, которую хотите получить:",
+    "text_html": "🔄 Выберите валюту, которую хотите получить:",
+    "text_markdown": "🔄 Выберите валюту, которую хотите получить:",
+    "buttons": [
+      {
+        "text": "Bitcoin (BTC)",
+        "type": "KeyboardButtonCallback",
+        "row": 0,
+        "col": 0
+      },
+      {
+        "text": "Litecoin (LTC)",
+        "type": "KeyboardButtonCallback",
+        "row": 0,
+        "col": 1
+      },
+      {
+        "text": "Tether (USDT)",
+        "type": "KeyboardButtonCallback",
+        "row": 1,
+        "col": 0
+      },
+      {
+        "text": "Рубль (₽)",
+        "type": "KeyboardButtonCallback",
+        "row": 1,
+        "col": 1
+      },
+      {
+        "text": "Monero (XMR)",
+        "type": "KeyboardButtonCallback",
+        "row": 2,
+        "col": 0
+      },
+      {
+        "text": "Ethereum (ETH)",
+        "type": "KeyboardButtonCallback",
+        "row": 2,
+        "col": 1
+      }
+    ],
+    "button_rows": [
+      [
+        {
+          "text": "Bitcoin (BTC)",
+          "type": "KeyboardButtonCallback",
+          "row": 0,
+          "col": 0
+        },
+        {
+          "text": "Litecoin (LTC)",
+          "type": "KeyboardButtonCallback",
+          "row": 0,
+          "col": 1
+        }
+      ],
+      [
+        {
+          "text": "Tether (USDT)",
+          "type": "KeyboardButtonCallback",
+          "row": 1,
+          "col": 0
+        },
+        {
+          "text": "Рубль (₽)",
+          "type": "KeyboardButtonCallback",
+          "row": 1,
+          "col": 1
+        }
+      ],
+      [
+        {
+          "text": "Monero (XMR)",
+          "type": "KeyboardButtonCallback",
+          "row": 2,
+          "col": 0
+        },
+        {
+          "text": "Ethereum (ETH)",
+          "type": "KeyboardButtonCallback",
+          "row": 2,
+          "col": 1
+        }
+      ]
+    ],
+    "media": null,
+    "text_links": []
+  },
+  "16844cf0800595f7cf57f5319f48ba61": {
+    "text": "❌ Ошибка!: Invalid or unsupported Segwit (Bech32) or Base58 encoding.",
+    "text_html": "❌ Ошибка!: Invalid or unsupported Segwit (Bech32) or Base58 encoding.",
+    "text_markdown": "❌ Ошибка!: Invalid or unsupported Segwit (Bech32) or Base58 encoding.",
+    "buttons": [],
+    "button_rows": [],
+    "media": null,
+    "text_links": []
   }
 }

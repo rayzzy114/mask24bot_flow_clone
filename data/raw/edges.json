@@ -613,5 +613,70 @@
     "from": "d8508c2e03a4ebede813a4f17a3f1e1f",
     "action": "❌ Отмена",
     "to": "4dd498fb2857472407baa8a4e213d9d9"
+  },
+  {
+    "from": "0491b32aa93fbb577f1f8db1e6b06aca",
+    "action": "<next-message>",
+    "to": "38411b3ac84128632f281182e8a4f9db"
+  },
+  {
+    "from": "39c2aa6a5b41534b2c2cc9e0da2e6eb1",
+    "action": "🔄  Обмен",
+    "to": "5954d5f545e39db15b4036cbbb8b5064"
+  },
+  {
+    "from": "5954d5f545e39db15b4036cbbb8b5064",
+    "action": "⏩ Пропустить",
+    "to": "aa26df710d36d58a503cac00d9966f40"
+  },
+  {
+    "from": "5954d5f545e39db15b4036cbbb8b5064",
+    "action": "✅ Пройти верификацию",
+    "to": "0766f67f1c00e5f1547c5e8c2e58f978"
+  },
+  {
+    "from": "5954d5f545e39db15b4036cbbb8b5064",
+    "action": "🔙 Назад",
+    "to": "39c2aa6a5b41534b2c2cc9e0da2e6eb1"
+  },
+  {
+    "from": "aa26df710d36d58a503cac00d9966f40",
+    "action": "Bitcoin (BTC)",
+    "to": "230eb12bd9b1d8c5aea8da3109ab23ab"
+  },
+  {
+    "from": "aa26df710d36d58a503cac00d9966f40",
+    "action": "Litecoin (LTC)",
+    "to": "230eb12bd9b1d8c5aea8da3109ab23ab"
+  },
+  {
+    "from": "aa26df710d36d58a503cac00d9966f40",
+    "action": "Tether (USDT)",
+    "to": "230eb12bd9b1d8c5aea8da3109ab23ab"
+  },
+  {
+    "from": "aa26df710d36d58a503cac00d9966f40",
+    "action": "Monero (XMR)",
+    "to": "230eb12bd9b1d8c5aea8da3109ab23ab"
+  },
+  {
+    "from": "aa26df710d36d58a503cac00d9966f40",
+    "action": "Ethereum (ETH)",
+    "to": "230eb12bd9b1d8c5aea8da3109ab23ab"
+  },
+  {
+    "from": "aa26df710d36d58a503cac00d9966f40",
+    "action": "Рубль (₽)",
+    "to": "f1350b4903b71b8fa6a55e6f3df5b29c"
+  },
+  {
+    "from": "b431f99d7b22df0dc8f2b02ab4dd3d15",
+    "action": "<input>",
+    "to": "16844cf0800595f7cf57f5319f48ba61"
+  },
+  {
+    "from": "16844cf0800595f7cf57f5319f48ba61",
+    "action": "<next-message>",
+    "to": "39c2aa6a5b41534b2c2cc9e0da2e6eb1"
   }
 ]
