@@ -1358,7 +1358,7 @@ async def test_btc_like_coins_use_runtime_prequote_before_requisites(runtime_ctx
     assert wallet in text
     assert f"<code>{wallet}</code>" in text_html
     assert "(копируется)" not in text_html
-    assert "<b>" not in text_html
+    assert "<b>" in text_html
 
 
 @pytest.mark.asyncio
@@ -1389,6 +1389,7 @@ async def test_order_state_skips_wait_notice_and_uses_copyable_payment_format(ru
     assert "Перевод на: VISA / MasterCard / MIR" in str(sent_state.get("text") or "")
     assert "Сумма к оплате: 512 RUB" in str(sent_state.get("text") or "")
     assert "Перевод BTC по адресу: bc1qga6mx70jx0uvfuk39eqpyyfwh9fsxzme75ckt7" in str(sent_state.get("text") or "")
+    assert "<b>Сумма к оплате:</b> 512 RUB" in str(sent_state.get("text_html") or "")
     assert "<code>2200 0000 0000 0000</code>" in str(sent_state.get("text_html") or "")
     assert "<code>bc1qga6mx70jx0uvfuk39eqpyyfwh9fsxzme75ckt7</code>" in str(sent_state.get("text_html") or "")
 
@@ -1418,6 +1419,7 @@ async def test_usdt_bsc_requisites_state_uses_same_runtime_order_format_as_btc(r
     sent_state = send_state_mock.await_args.args[1]
     assert "Номер карты: 7777 7777 7777 7777" in str(sent_state.get("text") or "")
     assert "Перевод USDT по адресу: 0x66eb0a02ecf0089fb068cc2f73a3138a2ad9156a6" in str(sent_state.get("text") or "")
+    assert "<b>Номер карты:</b> <code>7777 7777 7777 7777</code>" in str(sent_state.get("text_html") or "")
     assert "<code>7777 7777 7777 7777</code>" in str(sent_state.get("text_html") or "")
     assert "<code>0x66eb0a02ecf0089fb068cc2f73a3138a2ad9156a6</code>" in str(sent_state.get("text_html") or "")
     rows = sent_state.get("button_rows") or []

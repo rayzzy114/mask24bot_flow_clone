@@ -1185,24 +1185,24 @@ class FlowRuntime:
             "⏱️ На оплату даётся 20 минут!"
         )
         patched["text_html"] = (
-            f"🗳 Заявка: №{order_number}\n\n"
-            f"Перевод на: {payment_label}\n"
-            f"Номер карты: <code>{escaped_card}</code>\n"
-            f"Сумма к оплате: {amount_rub} RUB\n\n"
-            f"Перевод {coin} по адресу: <code>{escaped_wallet}</code>\n\n"
-            "⚠️ Внимание: В точности до рубля, иначе мы не сможем вернуть средства!\n\n"
-            "🧾 После оплаты нажмите “✅ Я оплатил”\n\n"
-            "⏱️ На оплату даётся 20 минут!"
+            f"🗳 <b>Заявка: №{order_number}</b>\n\n"
+            f"<b>Перевод на:</b> {payment_label}\n"
+            f"<b>Номер карты:</b> <code>{escaped_card}</code>\n"
+            f"<b>Сумма к оплате:</b> {amount_rub} RUB\n\n"
+            f"<b>Перевод {coin} по адресу:</b>\n<code>{escaped_wallet}</code>\n\n"
+            "<b>⚠️ Внимание:</b> В точности до рубля, иначе мы не сможем вернуть средства!\n\n"
+            "<b>🧾 После оплаты нажмите “✅ Я оплатил”</b>\n\n"
+            "<b>⏱️ На оплату даётся 20 минут!</b>"
         )
         patched["text_markdown"] = (
-            f"🗳 Заявка: №{order_number}\n\n"
-            f"Перевод на: {payment_label}\n"
-            f"Номер карты: `{requisites}`\n"
-            f"Сумма к оплате: {amount_rub} RUB\n\n"
-            f"Перевод {coin} по адресу: `{wallet}`\n\n"
-            "⚠️ Внимание: В точности до рубля, иначе мы не сможем вернуть средства!\n\n"
-            "🧾 После оплаты нажмите “✅ Я оплатил”\n\n"
-            "⏱️ На оплату даётся 20 минут!"
+            f"🗳 **Заявка: №{order_number}**\n\n"
+            f"**Перевод на:** {payment_label}\n"
+            f"**Номер карты:** `{requisites}`\n"
+            f"**Сумма к оплате:** {amount_rub} RUB\n\n"
+            f"**Перевод {coin} по адресу:**\n`{wallet}`\n\n"
+            "**⚠️ Внимание:** В точности до рубля, иначе мы не сможем вернуть средства!\n\n"
+            "**🧾 После оплаты нажмите “✅ Я оплатил”**\n\n"
+            "**⏱️ На оплату даётся 20 минут!**"
         )
         pay_btn = {"text": "✅ Я оплатил", "type": "KeyboardButtonCallback", "row": 0, "col": 0}
         cancel_btn = {"text": "❌ Отмена", "type": "KeyboardButtonCallback", "row": 1, "col": 0}
@@ -1328,19 +1328,19 @@ class FlowRuntime:
             f"На кошелек: {wallet}",
         ]
         html_lines = [
-            f"📉 Курс покупки {coin} (₽): {rate_label} руб.",
+            f"📉 <b>Курс покупки {coin} (₽): {rate_label} руб.</b>",
             "",
-            f"К оплате: {amount_rub} ₽",
-            f"Комиссия сервиса: {commission:g}%",
-            f"Получите: {amount_label} {coin}",
+            f"К оплате: <b>{amount_rub} ₽</b>",
+            f"Комиссия сервиса: <b>{commission:g}%</b>",
+            f"Получите: <b>{amount_label} {coin}</b>",
             f"На кошелек: <code>{html.escape(wallet)}</code>",
         ]
         markdown_lines = [
-            f"📉 Курс покупки {coin} (₽): {rate_label} руб.",
+            f"📉 **Курс покупки {coin} (₽): {rate_label} руб.**",
             "",
-            f"К оплате: {amount_rub} ₽",
-            f"Комиссия сервиса: {commission:g}%",
-            f"Получите: {amount_label} {coin}",
+            f"К оплате: **{amount_rub} ₽**",
+            f"Комиссия сервиса: **{commission:g}%**",
+            f"Получите: **{amount_label} {coin}**",
             f"На кошелек: `{wallet}`",
         ]
         if coin == "USDT" and network:
