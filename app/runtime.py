@@ -476,7 +476,10 @@ class FlowRuntime:
             await msg.answer("⚠️ Введите корректную сумму числом.")
             return True
         coin = (session.selected_coin or "BTC").upper()
-        max_allowed = await self._coin_max_amount(coin)
+        live_max = await self._coin_max_amount(coin)
+        # Use the higher of the live rate and what was displayed to the user —
+        # prevents an infinite loop when the rate drifts slightly between render and input.
+        max_allowed = max(live_max, session.last_shown_max)
         if parsed > max_allowed:
             await self._send_state_by_id(msg, session.state_id, session=session)
             return True
@@ -1068,6 +1071,10 @@ class FlowRuntime:
         min_amount = await self._coin_min_amount(coin)
         formatted_max = self._format_dynamic_limit(max_amount, coin=coin)
         formatted_min = self._format_dynamic_limit(min_amount, coin=coin) if min_amount is not None else ""
+
+        if session is not None and state_id in self._MAX_AMOUNT_ERROR_STATE_IDS:
+            session.last_shown_max = max_amount
+            session.mark_dirty()
 
         themed = dict(state)
         for key in ("text", "text_html", "text_markdown"):

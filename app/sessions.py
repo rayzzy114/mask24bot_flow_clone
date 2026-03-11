@@ -15,6 +15,7 @@ class UserSession:
     updated_at: float = field(default_factory=time.time)
     last_action_ts: float = 0.0
     last_input: str = ""  # Помним последний ввод юзера
+    last_shown_max: float = 0.0  # Max amount shown to user at last max-error state render
     _dirty: bool = False # Флаг изменения
 
     def push_state(self, state_id: str) -> None:
