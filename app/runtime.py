@@ -937,6 +937,7 @@ class FlowRuntime:
             live_rates_rub=live_rates_rub,
         )
         state = self._apply_selected_coin_theming(state, state_id=state_id, session=session)
+        state = self._apply_dynamic_payment_methods(state, state_id=state_id)
         state = await self._apply_dynamic_amount_limits(
             state,
             state_id=state_id,
@@ -966,6 +967,43 @@ class FlowRuntime:
             media_store=self.app_context.media,
             token_by_action=self.tokens.get_token,
         )
+
+    def _apply_dynamic_payment_methods(self, state: dict[str, Any], *, state_id: str) -> dict[str, Any]:
+        if not self._is_payment_method_picker_state_id(state_id):
+            return state
+
+        methods = [method.strip() for method in self.app_context.settings.payment_methods() if method.strip()]
+        if not methods:
+            return state
+
+        back_text = "🔙 Назад"
+        rows = state.get("button_rows")
+        if isinstance(rows, list):
+            for row in rows:
+                if not isinstance(row, list):
+                    continue
+                for btn in row:
+                    if not isinstance(btn, dict):
+                        continue
+                    text = str(btn.get("text") or "").strip()
+                    if self._is_back_action(text):
+                        back_text = text
+                        break
+
+        patched = dict(state)
+        button_rows: list[list[dict[str, Any]]] = []
+        buttons: list[dict[str, Any]] = []
+        for index, method in enumerate(methods):
+            btn = {"text": method, "type": "KeyboardButtonCallback", "row": index, "col": 0}
+            button_rows.append([btn])
+            buttons.append(btn)
+
+        back_btn = {"text": back_text, "type": "KeyboardButtonCallback", "row": len(button_rows), "col": 0}
+        button_rows.append([back_btn])
+        buttons.append(back_btn)
+        patched["button_rows"] = button_rows
+        patched["buttons"] = buttons
+        return patched
 
     async def _send_requisites_selection_notice(self, msg: Message) -> None:
         caption = "⏳ <b>Подбор реквизитов, 15 сек...</b>"
@@ -1159,6 +1197,10 @@ class FlowRuntime:
                 scale_from_existing=True,
                 multiplier=multiplier,
             )
+            value = self._inject_quote_commission_line(
+                value,
+                commission_percent=self.app_context.settings.commission_percent,
+            )
             value = re.sub(
                 r"((?:На кошелек|На кошел[её]к)[^:\n]*:\s*)([^\n]+)",
                 lambda m: f"{m.group(1)}{wallet}",
@@ -1167,6 +1209,29 @@ class FlowRuntime:
             )
             patched[key] = value
         return patched
+
+    def _inject_quote_commission_line(self, text: str, *, commission_percent: float) -> str:
+        if not text:
+            return text
+        if "комиссия сервиса" in text.lower():
+            return text
+
+        commission_value = self._format_runtime_quote_value(
+            max(float(commission_percent), 0.0),
+            source_token=str(commission_percent),
+        )
+        line = f"Комиссия сервиса: {commission_value}%"
+        lines = text.splitlines()
+        out_lines: list[str] = []
+        inserted = False
+        for current in lines:
+            out_lines.append(current)
+            if not inserted and "к оплате" in current.lower():
+                out_lines.append(line)
+                inserted = True
+        if not inserted:
+            out_lines.append(line)
+        return "\n".join(out_lines)
 
     def _extract_quote_receive_amount(self, text: str) -> float | None:
         match = re.search(r"Получите:\s*([0-9]+(?:[.,][0-9]+)?)", text, flags=re.IGNORECASE)
@@ -1376,14 +1441,20 @@ class FlowRuntime:
         action_map = self.catalog.transition_index.get(state_id) or {}
         action = (action_text or "").strip()
         targets = action_map.get(action) or []
-        if len(targets) <= 1:
+        if not targets:
+            selected_method = self._match_payment_method(action)
+            if selected_method:
+                targets = self._payment_method_picker_targets(state_id)
+        if len(targets) == 1:
+            return targets[0]
+        if not targets:
             return None
 
         coin = (session.selected_coin or "").upper()
         if not coin:
             return None
 
-        if action == "💳 Карты на карту":
+        if action == "💳 Карты на карту" or self._match_payment_method(action):
             if coin == "USDT":
                 network_target = None
                 for target in targets:
@@ -1436,6 +1507,19 @@ class FlowRuntime:
                     return target
 
         return targets[0]
+
+    def _payment_method_picker_targets(self, state_id: str) -> list[str]:
+        if not self._is_payment_method_picker_state_id(state_id):
+            return []
+        action_map = self.catalog.transition_index.get(state_id) or {}
+        for action_text, targets in action_map.items():
+            if self._is_back_action(action_text):
+                continue
+            if self._extract_coin_symbol(action_text):
+                continue
+            if targets:
+                return list(targets)
+        return []
 
     def _extract_network_choice(self, action_text: str) -> str:
         action = (action_text or "").upper()
@@ -1624,6 +1708,17 @@ class FlowRuntime:
     def _state_has_only_system_next(self, state_id: str) -> bool:
         action_map = self.catalog.transition_index.get(state_id) or {}
         return bool(action_map) and set(action_map.keys()) == {"<next-message>"}
+
+    def _is_payment_method_picker_state_id(self, state_id: str) -> bool:
+        state = self.catalog.states.get(state_id) or {}
+        text_blob = "\n".join(
+            [
+                str(state.get("text") or ""),
+                str(state.get("text_html") or ""),
+                str(state.get("text_markdown") or ""),
+            ]
+        ).lower()
+        return "выберите метод оплаты" in text_blob
 
     def _state_explicitly_requests_text_input(self, state_id: str) -> bool:
         state = self.catalog.states.get(state_id) or {}

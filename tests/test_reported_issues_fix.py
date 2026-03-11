@@ -561,6 +561,47 @@ async def test_usdt_card_to_card_opens_network_picker(runtime_ctx):
 
 
 @pytest.mark.asyncio
+async def test_payment_method_picker_renders_methods_from_admin_settings(runtime_ctx, monkeypatch):
+    runtime, _ = runtime_ctx
+    method_state = "230eb12bd9b1d8c5aea8da3109ab23ab"
+    runtime.app_context.settings.data["requisites"]["payment_methods"] = ["СБП", "Наличные"]
+    runtime._get_live_rates_rub = AsyncMock(return_value={})
+    send_state_mock = AsyncMock()
+    monkeypatch.setattr("app.runtime.send_state", send_state_mock)
+
+    msg = MagicMock(spec=Message)
+    msg.from_user = User(id=999, is_bot=False, first_name="Tester")
+
+    await runtime._send_state_by_id(msg, method_state, session=UserSession(state_id=method_state))
+
+    sent_state = send_state_mock.await_args.args[1]
+    rows = sent_state.get("button_rows") or []
+    flat_texts = [str(btn.get("text") or "") for row in rows for btn in row if isinstance(btn, dict)]
+    assert flat_texts == ["СБП", "Наличные", "🔙 Назад"]
+
+
+@pytest.mark.asyncio
+async def test_custom_payment_method_uses_payment_picker_flow(runtime_ctx):
+    runtime, _ = runtime_ctx
+    method_state = "230eb12bd9b1d8c5aea8da3109ab23ab"
+    amount_state = "dd8e48ace94f57bf3eba334f6ab5b7d2"
+    runtime.app_context.settings.data["requisites"]["payment_methods"] = ["СБП", "Наличные"]
+    session = UserSession(state_id=method_state, history=[method_state], selected_coin="BTC")
+    runtime.sessions[999] = session
+    runtime._send_state_by_id = AsyncMock()
+
+    msg = MagicMock(spec=Message)
+    msg.from_user = User(id=999, is_bot=False, first_name="Tester")
+    msg.text = "СБП"
+
+    await runtime.on_message(msg)
+
+    assert session.selected_payment_method == "СБП"
+    assert session.state_id == amount_state
+    runtime._send_state_by_id.assert_awaited_with(msg, amount_state, session=session)
+
+
+@pytest.mark.asyncio
 async def test_usdt_network_choice_is_remembered_for_trc20(runtime_ctx):
     runtime, _ = runtime_ctx
     network_picker = "f29257f079d6fcdcb4dccc7ccf79bf53"
@@ -663,6 +704,8 @@ async def test_usdt_quote_state_uses_requested_amount_and_destination_wallet(run
     assert "Получите:</strong> 19" in text_html
     assert wallet in text
     assert wallet in text_html
+    assert "Комиссия сервиса: 2.5%" in text
+    assert "Комиссия сервиса: 2.5%" in text_html
     assert "Получите: 35" not in text
     assert "0x2b90e061a517db2bbd7e39ef7f733fd234b494ca" not in text
 
