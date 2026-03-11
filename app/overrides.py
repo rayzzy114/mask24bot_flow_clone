@@ -7,7 +7,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 CARD_RE = re.compile(r"\b\d{4}(?:[ \-]?\d{4}){3}\b")
-RATE_LINE_HINTS = ("курс покупки", "курс продажи")
+RATE_LINE_HINTS = ("курс покупки", "курс продажи", "по курсу")
 PAYMENT_LINE_HINTS = ("к оплате", "с учетом скидки")
 MONEY_RUB_RE = re.compile(r"([0-9][0-9 .,]*[0-9])(\s*руб\.?)", re.IGNORECASE)
 
@@ -185,7 +185,7 @@ def _apply_commission(rate_rub: float, prefix: str, commission_percent: float) -
     fee = max(float(commission_percent), 0.0)
     factor = fee / 100.0
     normalized_prefix = (prefix or "").lower()
-    if "курс покупки" in normalized_prefix:
+    if "курс покупки" in normalized_prefix or ("покупка" in normalized_prefix and "по курсу" in normalized_prefix):
         return rate_rub * (1.0 + factor)
     if "курс продажи" in normalized_prefix:
         return rate_rub * (1.0 - factor)
@@ -261,6 +261,8 @@ def _symbol_from_rate_asset(asset: str) -> str | None:
         return "BTC"
     if "ethereum" in text or "eth" in text:
         return "ETH"
+    if "monero" in text or "xmr" in text:
+        return "XMR"
     if "tron" in text or "trx" in text:
         return "TRX"
     if "ton" in text:

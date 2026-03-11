@@ -548,5 +548,55 @@
     "from": "f9530086595ec4d827e2c1df11489593",
     "action": "<manual-input>",
     "to": "39c2aa6a1534fa73a1a2ab96eef4cbb4"
+  },
+  {
+    "from": "230eb12bd9b1d8c5aea8da3109ab23ab",
+    "action": "Monero (XMR)",
+    "to": "c7dc1b492541b449585da857e71c7e29"
+  },
+  {
+    "from": "c7dc1b492541b449585da857e71c7e29",
+    "action": "🔙 Назад",
+    "to": "230eb12bd9b1d8c5aea8da3109ab23ab"
+  },
+  {
+    "from": "c7dc1b492541b449585da857e71c7e29",
+    "action": "<manual-input>",
+    "to": "962eb30dd5a37037bc9d0c643dc390b8"
+  },
+  {
+    "from": "c7dc1b492541b449585da857e71c7e29",
+    "action": "<input>",
+    "to": "962eb30dd5a37037bc9d0c643dc390b8"
+  },
+  {
+    "from": "962eb30dd5a37037bc9d0c643dc390b8",
+    "action": "🔙 Назад",
+    "to": "c7dc1b492541b449585da857e71c7e29"
+  },
+  {
+    "from": "962eb30dd5a37037bc9d0c643dc390b8",
+    "action": "<manual-input>",
+    "to": "7d04573c2e8a4686265d3b1a265c97c5"
+  },
+  {
+    "from": "7d04573c2e8a4686265d3b1a265c97c5",
+    "action": "🔙 Назад",
+    "to": "962eb30dd5a37037bc9d0c643dc390b8"
+  },
+  {
+    "from": "7d04573c2e8a4686265d3b1a265c97c5",
+    "action": "<manual-input>",
+    "to": "8159fb3f2182fd41a3232b267aba175d"
+  },
+  {
+    "from": "8159fb3f2182fd41a3232b267aba175d",
+    "action": "🔙 Назад",
+    "to": "7d04573c2e8a4686265d3b1a265c97c5"
+  },
+  {
+    "from": "8159fb3f2182fd41a3232b267aba175d",
+    "action": "✅ Согласен",
+    "to": "0491b32aa93fbb577f1f8db1e6b06aca"
   }
 ]

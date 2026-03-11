@@ -77,11 +77,15 @@ class FlowRuntime:
     _MAX_AMOUNT_USD_BUDGET = 100.0
     _MIN_AMOUNT_BTC_BASE = 0.00004960
     _AMOUNT_DUST_FLOOR = 0.00001
-    _MAX_AMOUNT_ERROR_STATE_ID = "2fed3c394a37b41f55f21d474b5734ae"
+    _MAX_AMOUNT_ERROR_STATE_IDS = {
+        "2fed3c394a37b41f55f21d474b5734ae",  # BTC max error
+        "962eb30dd5a37037bc9d0c643dc390b8",  # XMR max error
+    }
     _MIN_AMOUNT_STATE_IDS = {
         "4638c2dc946f913813ff1d81427e5703",
         "dd8e48ace94f57bf3eba334f6ab5b7d2",
         "d10355801a11f2d98b2f14663355934e",
+        "c7dc1b492541b449585da857e71c7e29",  # XMR amount
     }
 
     def __init__(
@@ -465,7 +469,7 @@ class FlowRuntime:
         await msg.answer(caption, parse_mode=ParseMode.HTML)
 
     async def _handle_max_amount_retry(self, msg: Message, session: UserSession, text: str) -> bool:
-        if session.state_id != self._MAX_AMOUNT_ERROR_STATE_ID:
+        if session.state_id not in self._MAX_AMOUNT_ERROR_STATE_IDS:
             return False
         parsed = self._parse_amount_text(text)
         if parsed is None:
@@ -929,14 +933,25 @@ class FlowRuntime:
             return None
 
         if action == "💳 Карты на карту":
-            # Product requirement: all crypto coins follow BTC textual flow; only labels/media differ upstream.
+            # XMR has dedicated states — route directly instead of using BTC-themed path.
+            if coin == "XMR":
+                _XMR_AMOUNT = "c7dc1b492541b449585da857e71c7e29"
+                # Prefer edge-registered target if present
+                for target in targets:
+                    target_text = self._normalize_action_text(self._state_text(target))
+                    if "monero" in target_text or "xmr" in target_text:
+                        return target
+                if _XMR_AMOUNT in self.catalog.states:
+                    return _XMR_AMOUNT
+
+            # All other crypto coins follow BTC textual flow; only labels/media differ upstream.
             btc_target = None
             for target in targets:
                 target_text = self._normalize_action_text(self._state_text(target))
                 if "bitcoin (btc)" in target_text:
                     btc_target = target
                     break
-            if btc_target and coin in {"BTC", "LTC", "USDT", "ETH", "XMR", "TRX", "TON"}:
+            if btc_target and coin in {"BTC", "LTC", "USDT", "ETH", "TRX", "TON"}:
                 return btc_target
 
         keywords_map: dict[str, tuple[str, ...]] = {
@@ -999,8 +1014,8 @@ class FlowRuntime:
         if not session or not session.selected_coin:
             return state
         coin = session.selected_coin.upper()
-        if coin == "BTC":
-            return state
+        if coin in {"BTC", "XMR"}:
+            return state  # XMR has dedicated states, no BTC-theming needed
 
         # The product flow is BTC-first; adapt coin wording/media for other coins.
         themed_state_ids = {
@@ -1051,15 +1066,15 @@ class FlowRuntime:
         coin = ((session.selected_coin if session else "") or "BTC").upper()
         max_amount = await self._coin_max_amount(coin)
         min_amount = await self._coin_min_amount(coin)
-        formatted_max = f"{max_amount:.8f}"
-        formatted_min = f"{min_amount:.8f}" if min_amount is not None else ""
+        formatted_max = self._format_dynamic_limit(max_amount, coin=coin)
+        formatted_min = self._format_dynamic_limit(min_amount, coin=coin) if min_amount is not None else ""
 
         themed = dict(state)
         for key in ("text", "text_html", "text_markdown"):
             val = str(themed.get(key) or "")
             if not val:
                 continue
-            if state_id == self._MAX_AMOUNT_ERROR_STATE_ID:
+            if state_id in self._MAX_AMOUNT_ERROR_STATE_IDS:
                 val = re.sub(
                     r"(Максимум(?:\s|</?[^>]+>|[*_])*)([0-9]+(?:[.,][0-9]+)?)",
                     rf"\g<1>{formatted_max}",
@@ -1081,6 +1096,11 @@ class FlowRuntime:
                 )
             themed[key] = val
         return themed
+
+    def _format_dynamic_limit(self, amount: float, *, coin: str) -> str:
+        if (coin or "").upper() == "USDT":
+            return f"{amount:.2f}"
+        return f"{amount:.8f}"
 
     def _extract_coin_from_state_text(self, state_text_upper: str) -> str:
         if any(k in state_text_upper for k in ("USDT", "TETHER", "TRC20", "BSC20", "BEP20")):

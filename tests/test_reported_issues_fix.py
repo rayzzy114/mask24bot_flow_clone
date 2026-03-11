@@ -223,7 +223,7 @@ def test_variant_back_label_is_detected(runtime_ctx):
     assert runtime._is_back_action("🔙 Нет промо, назад")
 
 
-@pytest.mark.parametrize("coin", ["BTC", "LTC", "USDT", "XMR", "ETH"])
+@pytest.mark.parametrize("coin", ["BTC", "LTC", "USDT", "ETH"])
 def test_contextual_payment_route_for_all_crypto_coins_to_btc_flow(runtime_ctx, coin):
     runtime, _ = runtime_ctx
     payment_state = "230eb12bd9b1d8c5aea8da3109ab23ab"
@@ -231,6 +231,16 @@ def test_contextual_payment_route_for_all_crypto_coins_to_btc_flow(runtime_ctx, 
 
     target = runtime._resolve_contextual_transition(payment_state, "💳 Карты на карту", session)
     assert target == "dd8e48ace94f57bf3eba334f6ab5b7d2"
+
+
+def test_contextual_payment_route_for_xmr_to_dedicated_state(runtime_ctx):
+    """XMR has dedicated flow states, should NOT go through BTC-themed path."""
+    runtime, _ = runtime_ctx
+    payment_state = "230eb12bd9b1d8c5aea8da3109ab23ab"
+    session = UserSession(state_id=payment_state, history=[payment_state], selected_coin="XMR")
+
+    target = runtime._resolve_contextual_transition(payment_state, "💳 Карты на карту", session)
+    assert target == "c7dc1b492541b449585da857e71c7e29"
 
 
 def test_btc_amount_state_is_themed_for_ltc(runtime_ctx):
@@ -390,6 +400,46 @@ async def test_apply_dynamic_amount_limits_replaces_minimum_value(runtime_ctx):
     assert "0.01234567" in str(themed.get("text") or "")
     assert "0.01234567" in str(themed.get("text_html") or "")
     assert "35.00" not in str(themed.get("text") or "")
+
+
+@pytest.mark.asyncio
+async def test_apply_dynamic_amount_limits_formats_usdt_minimum_with_two_decimals(runtime_ctx):
+    runtime, _ = runtime_ctx
+    state_id = "dd8e48ace94f57bf3eba334f6ab5b7d2"
+    session = UserSession(state_id=state_id, selected_coin="USDT")
+    runtime._coin_min_amount = AsyncMock(return_value=35.5)
+    base_state = {
+        "text": "💰Введи нужную сумму в USDT ($)\nМинимум: 35.00 USDT",
+        "text_html": "<code>Минимум: 35.00 USDT</code>",
+        "text_markdown": "`Минимум: 35.00 USDT`",
+    }
+
+    themed = await runtime._apply_dynamic_amount_limits(base_state, state_id=state_id, session=session)
+
+    assert "35.50 USDT" in str(themed.get("text") or "")
+    assert "35.50 USDT" in str(themed.get("text_html") or "")
+    assert "35.50000000" not in str(themed.get("text") or "")
+    assert "35.50000000" not in str(themed.get("text_html") or "")
+
+
+@pytest.mark.asyncio
+async def test_apply_dynamic_amount_limits_formats_usdt_maximum_with_two_decimals(runtime_ctx):
+    runtime, _ = runtime_ctx
+    state_id = "2fed3c394a37b41f55f21d474b5734ae"
+    session = UserSession(state_id=state_id, selected_coin="USDT")
+    runtime._coin_max_amount = AsyncMock(return_value=100.0)
+    base_state = {
+        "text": "⛔️ Максимум 0.00190716 Bitcoin (BTC), введите еще раз...",
+        "text_html": "⛔️ <strong>Максимум</strong> 0.00190716 Bitcoin (BTC), введите еще раз...",
+        "text_markdown": "⛔️ **Максимум** 0.00190716 Bitcoin (BTC), введите еще раз...",
+    }
+
+    themed = await runtime._apply_dynamic_amount_limits(base_state, state_id=state_id, session=session)
+
+    assert "100.00" in str(themed.get("text") or "")
+    assert "100.00" in str(themed.get("text_html") or "")
+    assert "100.00000000" not in str(themed.get("text") or "")
+    assert "100.00000000" not in str(themed.get("text_html") or "")
 
 
 def test_validate_input_rejects_eth_dust_with_selected_coin(runtime_ctx):
