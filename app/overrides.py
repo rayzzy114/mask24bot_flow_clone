@@ -163,15 +163,15 @@ def _replace_live_rates(
             out_lines.append(line)
             continue
 
-        adjusted = _apply_commission(value, line, commission_percent)
+        adjusted_for_totals = _apply_commission(value, line, commission_percent)
 
         def repl_rate(match: re.Match[str]) -> str:
             old_token = match.group(1)
             suffix = match.group(2)
             old_value = _parse_money_value(old_token)
             if old_value and old_value > 0:
-                multipliers.append(adjusted / old_value)
-            return f"{_format_rub(adjusted)}{suffix}"
+                multipliers.append(adjusted_for_totals / old_value)
+            return f"{_format_rub(value)}{suffix}"
 
         out_lines.append(MONEY_RUB_RE.sub(repl_rate, line, count=1))
 
@@ -357,6 +357,7 @@ def _replace_requisites(text: str, *, replacement: str, detected_requisites: tup
         if old:
             value = value.replace(old, replacement)
     value = CARD_RE.sub(replacement, value)
+    value = re.sub(r"(?<=\d)\{\}", "", value)
     return value
 
 

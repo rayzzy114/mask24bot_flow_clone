@@ -105,8 +105,8 @@ def test_live_rates_apply_commission_for_buy_and_sell() -> None:
         live_rates_rub={"BTC": 100.0},
     )
     text = str(updated.get("text") or "")
-    assert "Курс покупки Bitcoin (₿): 102 руб." in text
-    assert "Курс продажи Bitcoin (₿): 98 руб." in text
+    assert "Курс покупки Bitcoin (₿): 100 руб." in text
+    assert "Курс продажи Bitcoin (₿): 100 руб." in text
 
 
 def test_commission_updates_payment_lines_plain_html_markdown() -> None:
@@ -145,15 +145,15 @@ def test_commission_updates_payment_lines_plain_html_markdown() -> None:
     text_html = str(updated.get("text_html") or "")
     text_markdown = str(updated.get("text_markdown") or "")
 
-    assert "Курс покупки Bitcoin (₿): 110 руб." in text
+    assert "Курс покупки Bitcoin (₿): 100 руб." in text
     assert "К оплате: 1 100 руб." in text
     assert "С учетом скидки: 990 руб." in text
 
-    assert "Курс покупки <strong>Bitcoin</strong> (₿): <code>110 руб.</code>" in text_html
+    assert "Курс покупки <strong>Bitcoin</strong> (₿): <code>100 руб.</code>" in text_html
     assert "<strong>К оплате:</strong> <del>1 100 руб.</del>" in text_html
     assert "<strong>С учетом скидки</strong>: 990 руб." in text_html
 
-    assert "Курс покупки **Bitcoin** (₿): `110 руб.`" in text_markdown
+    assert "Курс покупки **Bitcoin** (₿): `100 руб.`" in text_markdown
     assert "**К оплате:** ~~1 100 руб.~~" in text_markdown
     assert "**С учетом скидки**: 990 руб." in text_markdown
 
