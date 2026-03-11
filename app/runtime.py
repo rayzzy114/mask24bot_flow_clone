@@ -348,6 +348,7 @@ class FlowRuntime:
         if action_text == "✅ Я оплатил" and callback_message is not None:
             session.awaiting_payment_proof = True
             session.payment_context = session.last_rendered_text or self._state_text(session.state_id)
+            await self._clear_message_markup(callback_message)
             await callback_message.answer(PAYMENT_PROOF_PROMPT)
             await cb.answer()
             return
@@ -362,6 +363,7 @@ class FlowRuntime:
             session.awaiting_payment_proof = False
             notice_message = None
             if self._should_wait_before_requisites(action_text, next_state):
+                await self._clear_message_markup(callback_message)
                 await cb.answer()
                 notice_message = await self._send_requisites_selection_notice(callback_message)
                 await asyncio.sleep(random.randint(5, 12))
@@ -1071,6 +1073,19 @@ class FlowRuntime:
         except Exception:
             return
 
+    async def _clear_message_markup(self, message: Any) -> None:
+        if message is None:
+            return
+        edit_reply_markup = getattr(message, "edit_reply_markup", None)
+        if edit_reply_markup is None:
+            return
+        try:
+            result = edit_reply_markup(reply_markup=None)
+            if inspect.isawaitable(result):
+                await result
+        except Exception:
+            return
+
     async def _send_system_chain(self, msg: Message, session: UserSession, max_hops: int = 4) -> None:
         seen: set[str] = {session.state_id}
         current = session.state_id
@@ -1296,25 +1311,22 @@ class FlowRuntime:
             f"Комиссия сервиса: {commission:g}%",
             f"Получите: {amount_label} {coin}",
             f"На кошелек: {wallet}",
-            "(копируется)",
         ]
         html_lines = [
-            f"📉 Курс покупки {coin} (₽): {rate_label} руб.",
+            f"📉 <b>Курс покупки {coin} (₽): {rate_label} руб.</b>",
             "",
-            f"<b>К оплате:</b> {amount_rub} ₽",
-            f"<b>Комиссия сервиса:</b> {commission:g}%",
-            f"<b>Получите:</b> {amount_label} {coin}",
-            f"<b>На кошелек:</b> <code>{html.escape(wallet)}</code>",
-            "<i>(копируется)</i>",
+            f"К оплате: <b>{amount_rub} ₽</b>",
+            f"Комиссия сервиса: <b>{commission:g}%</b>",
+            f"Получите: <b>{amount_label} {coin}</b>",
+            f"На кошелек: <code>{html.escape(wallet)}</code>",
         ]
         markdown_lines = [
-            f"📉 Курс покупки {coin} (₽): {rate_label} руб.",
+            f"📉 **Курс покупки {coin} (₽): {rate_label} руб.**",
             "",
-            f"**К оплате:** {amount_rub} ₽",
-            f"**Комиссия сервиса:** {commission:g}%",
-            f"**Получите:** {amount_label} {coin}",
-            f"**На кошелек:** `{wallet}`",
-            "_(копируется)_",
+            f"К оплате: **{amount_rub} ₽**",
+            f"Комиссия сервиса: **{commission:g}%**",
+            f"Получите: **{amount_label} {coin}**",
+            f"На кошелек: `{wallet}`",
         ]
         if coin == "USDT" and network:
             network_line = f"Сеть ({network}): комиссия (0.3₮) включена в оплату"
@@ -1359,10 +1371,10 @@ class FlowRuntime:
     def _render_runtime_quote_wallet_line(self, *, prefix: str, wallet: str, field: str) -> str:
         wallet = wallet.strip()
         if field == "text_html":
-            return f"{prefix}<code>{html.escape(wallet)}</code>\n<i>(копируется)</i>"
+            return f"{prefix}<code>{html.escape(wallet)}</code>"
         if field == "text_markdown":
-            return f"{prefix}`{wallet}`\n_(копируется)_"
-        return f"{prefix}{wallet}\n(копируется)"
+            return f"{prefix}`{wallet}`"
+        return f"{prefix}{wallet}"
 
     def _inject_quote_commission_line(self, text: str, *, commission_percent: float) -> str:
         if not text:

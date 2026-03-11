@@ -747,8 +747,8 @@ async def test_usdt_quote_state_uses_requested_amount_and_destination_wallet(run
     assert "Получите:</strong> 19" in text_html
     assert wallet in text
     assert f"<code>{wallet}</code>" in text_html
-    assert "(копируется)" in text
-    assert "(копируется)" in text_html
+    assert "(копируется)" not in text
+    assert "(копируется)" not in text_html
     assert "Комиссия сервиса: 2.5%" in text
     assert "Комиссия сервиса: 2.5%" in text_html
     assert "Получите: 35" not in text
@@ -1224,6 +1224,69 @@ async def test_quote_agree_deletes_requisites_notice_after_order_sent(runtime_ct
 
 
 @pytest.mark.asyncio
+async def test_quote_agree_clears_pressed_quote_buttons(runtime_ctx, monkeypatch):
+    runtime, _ = runtime_ctx
+    quote_state_id = "d600074b23116f8c1024a7916d46d43e"
+    order_state_id = "c470c94e034f1631e0c841615c07c46b"
+    session = UserSession(
+        state_id=quote_state_id,
+        history=[runtime.catalog.start_state_id, quote_state_id],
+        selected_coin="USDT",
+        selected_payment_method="Перевод на карту",
+    )
+    runtime.sessions[999] = session
+    runtime.tokens.token_to_action["agree_quote_token_4"] = "✅ Согласен"
+    runtime._send_requisites_selection_notice = AsyncMock()
+    runtime._send_state_by_id = AsyncMock()
+    runtime._send_system_chain = AsyncMock()
+    monkeypatch.setattr("app.runtime.asyncio.sleep", AsyncMock())
+    monkeypatch.setattr("app.runtime.random.randint", MagicMock(return_value=7))
+
+    callback_message = MagicMock(spec=Message)
+    callback_message.answer = AsyncMock()
+    callback_message.edit_reply_markup = AsyncMock()
+
+    cb = MagicMock(spec=CallbackQuery)
+    cb.from_user = User(id=999, is_bot=False, first_name="Tester")
+    cb.data = "agree_quote_token_4"
+    cb.message = callback_message
+    cb.answer = AsyncMock()
+
+    await runtime.on_callback(cb)
+
+    callback_message.edit_reply_markup.assert_awaited_once_with(reply_markup=None)
+    runtime._send_state_by_id.assert_awaited_with(callback_message, order_state_id, session=session)
+
+
+@pytest.mark.asyncio
+async def test_paid_button_clears_pressed_order_buttons(runtime_ctx):
+    runtime, _ = runtime_ctx
+    order_state_id = "9ff74b9bf7f060310f1e52607e00c4b7"
+    session = UserSession(
+        state_id=order_state_id,
+        history=[runtime.catalog.start_state_id, order_state_id],
+        selected_coin="BTC",
+    )
+    runtime.sessions[999] = session
+    runtime.tokens.token_to_action["paid_token"] = "✅ Я оплатил"
+
+    callback_message = MagicMock(spec=Message)
+    callback_message.answer = AsyncMock()
+    callback_message.edit_reply_markup = AsyncMock()
+
+    cb = MagicMock(spec=CallbackQuery)
+    cb.from_user = User(id=999, is_bot=False, first_name="Tester")
+    cb.data = "paid_token"
+    cb.message = callback_message
+    cb.answer = AsyncMock()
+
+    await runtime.on_callback(cb)
+
+    callback_message.edit_reply_markup.assert_awaited_once_with(reply_markup=None)
+    callback_message.answer.assert_awaited()
+
+
+@pytest.mark.asyncio
 async def test_requisites_search_notice_uses_requested_wording(runtime_ctx):
     runtime, _ = runtime_ctx
     msg = MagicMock(spec=Message)
@@ -1258,10 +1321,10 @@ async def test_btc_like_coins_use_runtime_prequote_before_requisites(runtime_ctx
     text = str(state.get("text") or "")
     text_html = str(state.get("text_html") or "")
     assert "Комиссия сервиса: 2.5%" in text
-    assert "(копируется)" in text
+    assert "(копируется)" not in text
     assert wallet in text
     assert f"<code>{wallet}</code>" in text_html
-    assert "(копируется)" in text_html
+    assert "(копируется)" not in text_html
 
 
 @pytest.mark.asyncio
