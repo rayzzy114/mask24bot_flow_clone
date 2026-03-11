@@ -359,9 +359,13 @@ class FlowRuntime:
             await self.start(msg)
             return
 
-        if photos and self._is_verification_photo_state(session.state_id):
-            await self._handle_verification_photo(msg, session)
-            return
+        if self._expects_photo_input(session.state_id):
+            if photos:
+                await self._handle_verification_photo(msg, session)
+                return
+            if text:
+                await msg.answer(self._input_error_message(session.state_id, session=session))
+                return
         
         session.last_input = text
         session.mark_dirty()
@@ -403,6 +407,12 @@ class FlowRuntime:
         if text and await self._handle_max_amount_retry(msg, session, text):
             return
 
+        expected_input_kind = self._expected_input_kind(session.state_id, session=session)
+        if text and expected_input_kind in {"card", "amount", "address"}:
+            if not self._validate_input(session.state_id, text, session=session):
+                await msg.answer(self._input_error_message(session.state_id, session=session))
+                return
+
         # 3. Resolve Transition
         next_state = self._resolve_contextual_transition(session.state_id, text, session)
         if not next_state:
@@ -412,14 +422,12 @@ class FlowRuntime:
         
         # If no explicit action, but state accepts input, we validate and use <manual-input>/<input>
         if next_state is None and self.catalog.state_accepts_input(session.state_id):
-            # Input validation (only if we have text)
+            if not text and not photos:
+                await msg.answer(self._input_error_message(session.state_id, session=session))
+                return
+
             if text and not self._validate_input(session.state_id, text, session=session):
-                error_state = self._find_error_state(session.state_id, text)
-                if error_state:
-                    await self._send_state_by_id(msg, error_state, session=session)
-                    return
-                # Если специфичный error_state не найден, даем общий ответ
-                await msg.answer("⚠️ Введенные данные некорректны. Пожалуйста, проверьте формат и попробуйте снова.")
+                await msg.answer(self._input_error_message(session.state_id, session=session))
                 return
 
             # If it's a photo, we also allow transition if text is empty
@@ -594,42 +602,89 @@ class FlowRuntime:
         return prev_state
 
     def _validate_input(self, state_id: str, text: str, *, session: UserSession | None = None) -> bool:
-        """Validate input based on state text hints and checksums."""
+        """Validate text input based on the current state's prompt."""
+        normalized_text = (text or "").strip()
+        expected_kind = self._expected_input_kind(state_id, session=session)
         state_text = self._state_text(state_id).upper()
-        
-        # Check for address patterns
-        for coin, regex in FLOW_CATALOG_RE_MAP.items():
-            if coin in state_text and ("АДРЕС" in state_text or "WALLET" in state_text or "КОШЕЛЕК" in state_text or "ПРИСЛАТЬ" in state_text):
-                # We found a coin hint, now use strict checksum validation
-                return is_valid_crypto_address(text, coin, network_hint=state_text)
-        
-        # If it looks like an address input but coin not found in text, try all known crypto
-        if ("АДРЕС" in state_text or "WALLET" in state_text or "КОШЕЛЕК" in state_text) and len(text) > 20 and " " not in text:
-            # Try BTC and TRX/USDT as most common
-            if is_valid_crypto_address(text, "BTC"):
-                return True
-            if is_valid_crypto_address(text, "TRX"):
-                return True
-            if is_valid_crypto_address(text, "ETH"):
-                return True
-            if is_valid_crypto_address(text, "USDT", network_hint=state_text):
-                return True
+
+        if expected_kind == "card":
+            digits_only = re.sub(r"\D", "", normalized_text)
+            return len(digits_only) == 16 and digits_only.isdigit()
+
+        if expected_kind == "address":
+            for coin in FLOW_CATALOG_RE_MAP:
+                if coin in state_text and (
+                    "АДРЕС" in state_text or "WALLET" in state_text or "КОШЕЛЕК" in state_text or "ПРИСЛАТЬ" in state_text
+                ):
+                    return is_valid_crypto_address(normalized_text, coin, network_hint=state_text)
+
+            if len(normalized_text) > 20 and " " not in normalized_text:
+                if is_valid_crypto_address(normalized_text, "BTC"):
+                    return True
+                if is_valid_crypto_address(normalized_text, "TRX"):
+                    return True
+                if is_valid_crypto_address(normalized_text, "ETH"):
+                    return True
+                if is_valid_crypto_address(normalized_text, "USDT", network_hint=state_text):
+                    return True
             return False
 
-        # Check for amount patterns
-        if "СУММ" in state_text or "ВВЕДИТЕ" in state_text or "AMOUNT" in state_text:
+        if expected_kind == "amount":
             try:
-                val_str = text.replace(",", ".").replace(" ", "")
+                val_str = normalized_text.replace(",", ".").replace(" ", "")
                 val = float(val_str)
-                # Ensure it's not a tiny/dust amount for crypto inputs
-                coin = ((session.selected_coin if session else "") or self._extract_coin_from_state_text(state_text) or "").upper()
-                if coin and coin != "RUB" and val < self._AMOUNT_DUST_FLOOR:
-                    return False
-                return val > 0
             except ValueError:
                 return False
-                
-        return True
+            coin = ((session.selected_coin if session else "") or self._extract_coin_from_state_text(state_text) or "").upper()
+            if coin and coin != "RUB" and val < self._AMOUNT_DUST_FLOOR:
+                return False
+            return val > 0
+
+        if expected_kind == "photo":
+            return False
+
+        return bool(normalized_text)
+
+    def _expected_input_kind(self, state_id: str, *, session: UserSession | None = None) -> str:
+        state_text = self._state_text(state_id).upper()
+
+        if self._expects_photo_input(state_id):
+            return "photo"
+
+        if "16 ЦИФР" in state_text and "КАРТ" in state_text:
+            return "card"
+        if "НОМЕР ВАШЕЙ БАНКОВСКОЙ КАРТЫ" in state_text:
+            return "card"
+
+        if (
+            "АДРЕС" in state_text
+            or "WALLET" in state_text
+            or "КОШЕЛЕК" in state_text
+            or "КОШЕЛЁК" in state_text
+        ):
+            return "address"
+
+        if "СУММ" in state_text or "AMOUNT" in state_text:
+            return "amount"
+
+        if session is not None and self.catalog.state_accepts_input(state_id):
+            return "text"
+        return "unknown"
+
+    def _input_error_message(self, state_id: str, *, session: UserSession | None = None) -> str:
+        expected_kind = self._expected_input_kind(state_id, session=session)
+        if expected_kind == "card":
+            return "⚠️ Введите корректный номер карты: 16 цифр, можно с пробелами или без."
+        if expected_kind == "amount":
+            return "⚠️ Введите корректную сумму числом."
+        if expected_kind == "address":
+            return "⚠️ Введите корректный адрес кошелька."
+        if expected_kind == "photo":
+            return "⚠️ На этом шаге нужно отправить именно фото карты с листком и паролем."
+        return "⚠️ Введенные данные некорректны. Пожалуйста, проверьте формат и попробуйте снова."
+
+    def _expects_photo_input(self, state_id: str) -> bool:
+        return self._is_verification_photo_state(state_id)
 
     def _find_error_state(self, state_id: str, text: str) -> str | None:
         """Try to find a state in edges that looks like an error state for this input."""

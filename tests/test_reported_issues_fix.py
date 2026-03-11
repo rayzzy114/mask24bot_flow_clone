@@ -73,6 +73,7 @@ async def test_fix_validation_for_invalid_amount(runtime_ctx):
     msg = MagicMock(spec=Message)
     msg.from_user = User(id=999, is_bot=False, first_name="Tester")
     msg.text = "хуй"
+    msg.answer = AsyncMock()
     runtime._send_state_by_id = AsyncMock()
     
     await runtime.on_message(msg)
@@ -171,6 +172,112 @@ async def test_cancel_exits_verification_card_input(runtime_ctx):
 
     assert session.state_id == start_state
     runtime._send_state_by_id.assert_awaited()
+
+
+@pytest.mark.asyncio
+async def test_invalid_verification_card_shows_card_error_and_stays_put(runtime_ctx):
+    runtime, _ = runtime_ctx
+    verify_offer = "cb77e2d256ec6da86cc46a9c11857718"
+    verify_intro = "0766f67fa47dc42e73977f19493cc7a3"
+    verify_card_input = "282f5bb08cb59ce7b0d5edcc89657467"
+
+    session = UserSession(state_id=verify_card_input, history=[verify_offer, verify_intro, verify_card_input])
+    runtime.sessions[999] = session
+
+    msg = MagicMock(spec=Message)
+    msg.from_user = User(id=999, is_bot=False, first_name="Tester")
+    msg.text = "1234"
+    msg.photo = []
+    msg.answer = AsyncMock()
+    runtime._send_state_by_id = AsyncMock()
+
+    await runtime.on_message(msg)
+
+    assert session.state_id == verify_card_input
+    msg.answer.assert_awaited_once_with("⚠️ Введите корректный номер карты: 16 цифр, можно с пробелами или без.")
+    runtime._send_state_by_id.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_invalid_amount_shows_amount_error_and_stays_put(runtime_ctx):
+    runtime, _ = runtime_ctx
+    amount_state_id = "4638c2dc946f913813ff1d81427e5703"
+    session = UserSession(state_id=amount_state_id, history=[runtime.catalog.start_state_id, amount_state_id])
+    runtime.sessions[999] = session
+
+    msg = MagicMock(spec=Message)
+    msg.from_user = User(id=999, is_bot=False, first_name="Tester")
+    msg.text = "abc"
+    msg.photo = []
+    msg.answer = AsyncMock()
+    runtime._send_state_by_id = AsyncMock()
+
+    await runtime.on_message(msg)
+
+    assert session.state_id == amount_state_id
+    msg.answer.assert_awaited_once_with("⚠️ Введите корректную сумму числом.")
+    runtime._send_state_by_id.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_verification_photo_state_rejects_text_without_photo(runtime_ctx):
+    runtime, _ = runtime_ctx
+    verify_photo_state = "ec7347857d2b2531cf84d3d239457019"
+    session = UserSession(state_id=verify_photo_state, history=[verify_photo_state])
+    runtime.sessions[999] = session
+
+    msg = MagicMock(spec=Message)
+    msg.from_user = User(id=999, is_bot=False, first_name="Tester")
+    msg.text = "отправил"
+    msg.photo = []
+    msg.answer = AsyncMock()
+    runtime._send_state_by_id = AsyncMock()
+
+    await runtime.on_message(msg)
+
+    assert session.state_id == verify_photo_state
+    msg.answer.assert_awaited_once_with("⚠️ На этом шаге нужно отправить именно фото карты с листком и паролем.")
+    runtime._send_state_by_id.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_generic_invalid_input_uses_fallback_error(runtime_ctx, monkeypatch):
+    runtime, catalog = runtime_ctx
+    generic_state_id = "generic_invalid_input_state"
+    catalog.states[generic_state_id] = {"text": "Введите значение"}
+
+    session = UserSession(state_id=generic_state_id, history=[catalog.start_state_id, generic_state_id])
+    runtime.sessions[999] = session
+
+    original_accepts_input = catalog.state_accepts_input
+    original_resolve_action = catalog.resolve_action
+
+    monkeypatch.setattr(
+        catalog,
+        "state_accepts_input",
+        lambda state_id: True if state_id == generic_state_id else original_accepts_input(state_id),
+    )
+    monkeypatch.setattr(
+        catalog,
+        "resolve_action",
+        lambda state_id, action_text, is_text_input=False: None
+        if state_id == generic_state_id
+        else original_resolve_action(state_id, action_text, is_text_input=is_text_input),
+    )
+
+    msg = MagicMock(spec=Message)
+    msg.from_user = User(id=999, is_bot=False, first_name="Tester")
+    msg.text = ""
+    msg.caption = None
+    msg.photo = []
+    msg.answer = AsyncMock()
+    runtime._send_state_by_id = AsyncMock()
+
+    await runtime.on_message(msg)
+
+    assert session.state_id == generic_state_id
+    msg.answer.assert_awaited_once_with("⚠️ Введенные данные некорректны. Пожалуйста, проверьте формат и попробуйте снова.")
+    runtime._send_state_by_id.assert_not_awaited()
 
 
 def test_coin_button_fallback_uses_existing_coin_target(runtime_ctx):
