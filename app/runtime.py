@@ -1156,6 +1156,7 @@ class FlowRuntime:
 
         coin = (session.selected_coin or self._extract_coin_from_state_text(self._state_text(state_id)) or "BTC").upper()
         requisites = self._effective_requisites_for_state(session, state_id).strip()
+        bank = self._effective_bank_for_session(session, state_id).strip()
         wallet = (session.destination_wallet or "").strip()
         amount_rub = self._runtime_order_amount_rub(
             requested_coin_amount=float(session.requested_coin_amount or 0.0),
@@ -1172,12 +1173,16 @@ class FlowRuntime:
         payment_label = "VISA / MasterCard / MIR"
         escaped_card = html.escape(requisites)
         escaped_wallet = html.escape(wallet)
+        bank_plain = f"Банк получателя: {bank}\n" if bank else ""
+        bank_html = f"<b>Банк получателя:</b> {html.escape(bank)}\n" if bank else ""
+        bank_markdown = f"**Банк получателя:** {bank}\n" if bank else ""
 
         patched = dict(state)
         patched["text"] = (
             f"🗳 Заявка: №{order_number}\n\n"
             f"Перевод на: {payment_label}\n"
             f"Номер карты: {requisites}\n"
+            f"{bank_plain}"
             f"Сумма к оплате: {amount_rub} RUB\n\n"
             f"Перевод {coin} по адресу: {wallet}\n\n"
             "⚠️ Внимание: В точности до рубля, иначе мы не сможем вернуть средства!\n\n"
@@ -1188,6 +1193,7 @@ class FlowRuntime:
             f"🗳 <b>Заявка: №{order_number}</b>\n\n"
             f"<b>Перевод на:</b> {payment_label}\n"
             f"<b>Номер карты:</b> <code>{escaped_card}</code>\n"
+            f"{bank_html}"
             f"<b>Сумма к оплате:</b> {amount_rub} RUB\n\n"
             f"<b>Перевод {coin} по адресу:</b>\n<code>{escaped_wallet}</code>\n\n"
             "<b>⚠️ Внимание:</b> В точности до рубля, иначе мы не сможем вернуть средства!\n\n"
@@ -1198,6 +1204,7 @@ class FlowRuntime:
             f"🗳 **Заявка: №{order_number}**\n\n"
             f"**Перевод на:** {payment_label}\n"
             f"**Номер карты:** `{requisites}`\n"
+            f"{bank_markdown}"
             f"**Сумма к оплате:** {amount_rub} RUB\n\n"
             f"**Перевод {coin} по адресу:**\n`{wallet}`\n\n"
             "**⚠️ Внимание:** В точности до рубля, иначе мы не сможем вернуть средства!\n\n"
@@ -1253,50 +1260,19 @@ class FlowRuntime:
         if amount_rub <= 0:
             return state
 
-        current_receive = self._extract_quote_receive_amount(str(state.get("text") or ""))
-        multiplier = (requested_amount / current_receive) if current_receive and current_receive > 0 else 1.0
+        plain_text, html_text, markdown_text = self._build_runtime_quote_texts(
+            coin=coin,
+            wallet=wallet,
+            requested_amount=requested_amount,
+            amount_rub=amount_rub,
+            live_rates_rub=live_rates_rub,
+            network=(session.selected_network or "").upper(),
+        )
 
         patched = dict(state)
-        for key in ("text", "text_html", "text_markdown"):
-            value = str(patched.get(key) or "")
-            if not value:
-                continue
-            value = self._rewrite_quote_line(
-                value,
-                line_hint="получите",
-                new_value=requested_amount,
-                scale_from_existing=False,
-                multiplier=1.0,
-            )
-            value = self._rewrite_quote_line(
-                value,
-                line_hint="к оплате",
-                new_value=float(amount_rub),
-                scale_from_existing=False,
-                multiplier=1.0,
-            )
-            value = self._rewrite_quote_line(
-                value,
-                line_hint="с учетом скидки",
-                new_value=float(amount_rub),
-                scale_from_existing=True,
-                multiplier=multiplier,
-            )
-            value = self._inject_quote_commission_line(
-                value,
-                commission_percent=self.app_context.settings.commission_percent,
-            )
-            value = re.sub(
-                r"((?:На кошелек|На кошел[её]к)[^:\n]*:\s*)([^\n]+)(?:\n\((?:копируется)\))?",
-                lambda m: self._render_runtime_quote_wallet_line(
-                    prefix=m.group(1),
-                    wallet=wallet,
-                    field=key,
-                ),
-                value,
-                flags=re.IGNORECASE,
-            )
-            patched[key] = value
+        patched["text"] = plain_text
+        patched["text_html"] = html_text
+        patched["text_markdown"] = markdown_text
         return patched
 
     def _build_runtime_prequote_state(
@@ -1316,6 +1292,37 @@ class FlowRuntime:
         raw_rate = float(live_rates_rub.get(coin) or 0.0)
         commission = max(float(self.app_context.settings.commission_percent), 0.0)
         network = (session.selected_network or "").upper()
+        plain_text, html_text, markdown_text = self._build_runtime_quote_texts(
+            coin=coin,
+            wallet=wallet,
+            requested_amount=requested_amount,
+            amount_rub=amount_rub,
+            live_rates_rub=live_rates_rub,
+            network=network,
+        )
+        agree_btn = {"text": "✅ Согласен", "type": "KeyboardButtonCallback", "row": 0, "col": 0}
+        cancel_btn = {"text": "❌ Отмена", "type": "KeyboardButtonCallback", "row": 1, "col": 0}
+        return {
+            "id": RUNTIME_PREQUOTE_STATE_ID,
+            "text": plain_text,
+            "text_html": html_text,
+            "text_markdown": markdown_text,
+            "buttons": [agree_btn, cancel_btn],
+            "button_rows": [[agree_btn], [cancel_btn]],
+        }
+
+    def _build_runtime_quote_texts(
+        self,
+        *,
+        coin: str,
+        wallet: str,
+        requested_amount: float,
+        amount_rub: int,
+        live_rates_rub: dict[str, float],
+        network: str,
+    ) -> tuple[str, str, str]:
+        raw_rate = float(live_rates_rub.get(coin) or 0.0)
+        commission = max(float(self.app_context.settings.commission_percent), 0.0)
         rate_label = self._format_runtime_quote_value(raw_rate, source_token=str(raw_rate))
         amount_label = self._format_runtime_quote_value(requested_amount, source_token=str(requested_amount))
 
@@ -1372,16 +1379,7 @@ class FlowRuntime:
                 '**Нажмите "✅ Согласен" для получения реквизитов**',
             ]
         )
-        agree_btn = {"text": "✅ Согласен", "type": "KeyboardButtonCallback", "row": 0, "col": 0}
-        cancel_btn = {"text": "❌ Отмена", "type": "KeyboardButtonCallback", "row": 1, "col": 0}
-        return {
-            "id": RUNTIME_PREQUOTE_STATE_ID,
-            "text": "\n".join(plain_lines),
-            "text_html": "\n".join(html_lines),
-            "text_markdown": "\n".join(markdown_lines),
-            "buttons": [agree_btn, cancel_btn],
-            "button_rows": [[agree_btn], [cancel_btn]],
-        }
+        return "\n".join(plain_lines), "\n".join(html_lines), "\n".join(markdown_lines)
 
     def _render_runtime_quote_wallet_line(self, *, prefix: str, wallet: str, field: str) -> str:
         wallet = wallet.strip()

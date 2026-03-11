@@ -10,7 +10,7 @@ from app.constants import DEFAULT_LINKS
 from app.context import AppContext
 from app.rates import RateService
 from app.runtime import FlowRuntime, UserSession
-from app.overrides import RuntimeOverrides, apply_state_overrides
+from app.overrides import FAQ_FALLBACK_KEYS, RuntimeOverrides, apply_state_overrides
 from app.storage import OrdersStore, SessionsStore, SettingsStore, UsersStore, MediaStore
 
 PROJECT_DIR = Path(__file__).resolve().parents[1]
@@ -196,6 +196,15 @@ async def test_send_state_by_id_applies_admin_overrides_in_runtime_pipeline(tmp_
     assert support_ticket_aliases
     assert wallet_help_aliases
 
+    faq_state_id = _find_state_id(
+        lambda state: any(
+            str(btn.get("text") or "").strip() == "Начало работы"
+            for row in (state.get("button_rows") or [])
+            if isinstance(row, list)
+            for btn in row
+            if isinstance(btn, dict)
+        )
+    )
     terms_state_id = _find_state_id(
         lambda state: any(
             str(link) in terms_aliases
@@ -265,8 +274,8 @@ async def test_send_state_by_id_applies_admin_overrides_in_runtime_pipeline(tmp_
 
     await runtime._send_state_by_id(
         msg,
-        terms_state_id,
-        session=UserSession(state_id=terms_state_id),
+        faq_state_id,
+        session=UserSession(state_id=faq_state_id),
     )
     faq_backed_state = send_state_mock.await_args_list[-1].args[1]
     faq_urls = {

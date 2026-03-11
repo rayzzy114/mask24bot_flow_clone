@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any
 from urllib.parse import urlparse
 
-from .constants import LINK_LABELS
+from .constants import DEFAULT_LINKS, LINK_LABELS
 
 CARD_RE = re.compile(r"\b\d{4}(?:[ \-]?\d{4}){3}\b")
 RATE_LINE_HINTS = ("курс покупки", "курс продажи", "по курсу")
@@ -163,7 +163,10 @@ def _expand_link_overrides(link_overrides: dict[str, str]) -> dict[str, str]:
     faq_value = normalize_operator_url(expanded.get("faq", ""))
     if faq_value:
         for key in FAQ_FALLBACK_KEYS:
-            expanded.setdefault(key, faq_value)
+            current = normalize_operator_url(expanded.get(key, ""))
+            default = normalize_operator_url(DEFAULT_LINKS.get(key, ""))
+            if not current or current == default:
+                expanded[key] = faq_value
     return expanded
 
 
