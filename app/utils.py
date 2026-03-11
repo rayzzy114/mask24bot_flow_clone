@@ -84,9 +84,17 @@ def is_valid_crypto_address(address: str, symbol: str, network_hint: str = "") -
         return bool(re.match(r"^0x[a-fA-F0-9]{40}$", address))
         
     if symbol == "LTC":
+        if address.lower().startswith("ltc1"):
+            return len(address) >= 43 and all(c in "qpzry9x8gf2tvdw0s3jn54khce6mua7l" for c in address[4:].lower())
         if address.startswith(("L", "M", "3")):
             return validate_base58_checksum(address)
         return False
+
+    if symbol == "TON":
+        return bool(re.fullmatch(r"(?:EQ|UQ)[A-Za-z0-9_-]{46,64}", address))
+
+    if symbol == "XMR":
+        return bool(re.fullmatch(r"[1-9A-HJ-NP-Za-km-z]{95}|[1-9A-HJ-NP-Za-km-z]{106}", address))
 
     return len(address) > 20 # Fallback for others
 

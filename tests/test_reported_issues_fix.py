@@ -975,6 +975,28 @@ def test_validate_input_rejects_eth_dust_with_selected_coin(runtime_ctx):
     assert runtime._validate_input(amount_state_id, "0.01000000", session=session) is True
 
 
+def test_validate_input_accepts_ltc_bech32_with_selected_coin(runtime_ctx):
+    runtime, _ = runtime_ctx
+    wallet_state_id = "dfff19cf359e360e6644c920d8eb7c6b"
+    session = UserSession(state_id=wallet_state_id, selected_coin="LTC")
+    assert runtime._validate_input(
+        wallet_state_id,
+        "ltc1qzm85lrk2nh4gq8s2jvewajwnc5x98gkke3v2gc",
+        session=session,
+    ) is True
+
+
+def test_validate_input_accepts_ton_address_with_selected_coin(runtime_ctx):
+    runtime, _ = runtime_ctx
+    wallet_state_id = "dfff19cf359e360e6644c920d8eb7c6b"
+    session = UserSession(state_id=wallet_state_id, selected_coin="TON")
+    assert runtime._validate_input(
+        wallet_state_id,
+        "UQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAJKZ",
+        session=session,
+    ) is True
+
+
 @pytest.mark.asyncio
 async def test_wallet_state_free_text_moves_to_system_next(runtime_ctx):
     runtime, _ = runtime_ctx

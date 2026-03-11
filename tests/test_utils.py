@@ -32,3 +32,11 @@ def test_usdt_trc20_hint_accepts_valid_trx_when_tether_word_present(monkeypatch)
     hint = "USDT TETHER TRC20"
     assert is_valid_crypto_address(trx_like, "USDT", network_hint=hint)
     assert not is_valid_crypto_address(evm_like, "USDT", network_hint=hint)
+
+
+def test_ltc_bech32_address_is_accepted() -> None:
+    assert is_valid_crypto_address("ltc1qzm85lrk2nh4gq8s2jvewajwnc5x98gkke3v2gc", "LTC")
+
+
+def test_ton_user_friendly_address_is_accepted() -> None:
+    assert is_valid_crypto_address("UQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAJKZ", "TON")

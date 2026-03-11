@@ -722,6 +722,11 @@ class FlowRuntime:
             if session is not None:
                 session.destination_wallet = session_wallet
                 session.mark_dirty()
+            selected_coin = (
+                (session.selected_coin if session else "") or self._extract_coin_from_state_text(state_text) or ""
+            ).upper()
+            if selected_coin and selected_coin != "RUB":
+                return is_valid_crypto_address(normalized_text, selected_coin, network_hint=state_text)
             for coin in FLOW_CATALOG_RE_MAP:
                 if coin in state_text and (
                     "АДРЕС" in state_text or "WALLET" in state_text or "КОШЕЛЕК" in state_text or "ПРИСЛАТЬ" in state_text
@@ -731,11 +736,17 @@ class FlowRuntime:
             if len(normalized_text) > 20 and " " not in normalized_text:
                 if is_valid_crypto_address(normalized_text, "BTC"):
                     return True
+                if is_valid_crypto_address(normalized_text, "LTC"):
+                    return True
                 if is_valid_crypto_address(normalized_text, "TRX"):
                     return True
                 if is_valid_crypto_address(normalized_text, "ETH"):
                     return True
                 if is_valid_crypto_address(normalized_text, "USDT", network_hint=state_text):
+                    return True
+                if is_valid_crypto_address(normalized_text, "TON"):
+                    return True
+                if is_valid_crypto_address(normalized_text, "XMR"):
                     return True
             return False
 
