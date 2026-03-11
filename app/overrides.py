@@ -271,7 +271,7 @@ def _symbol_from_rate_asset(asset: str) -> str | None:
 
 
 def _format_rub(value: float) -> str:
-    return f"{value:,.2f}".replace(",", " ")
+    return f"{round(value):,}".replace(",", " ")
 
 
 def _replace_operator_urls(text: str, aliases: tuple[str, ...], target_url: str) -> str:

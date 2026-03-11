@@ -840,19 +840,32 @@ def test_payment_proof_texts_use_bold_and_administrator_wording():
 
 
 @pytest.mark.asyncio
-async def test_order_state_sends_requisites_wait_notice(runtime_ctx, monkeypatch):
+async def test_order_state_skips_wait_notice_and_uses_copyable_payment_format(runtime_ctx, monkeypatch):
     runtime, _ = runtime_ctx
     order_state_id = "9ff74b9bf7f060310f1e52607e00c4b7"
-    session = UserSession(state_id=order_state_id, history=[runtime.catalog.start_state_id, order_state_id])
+    session = UserSession(
+        state_id=order_state_id,
+        history=[runtime.catalog.start_state_id, order_state_id],
+        selected_coin="BTC",
+        selected_payment_method="Перевод на карту",
+    )
+    session.requested_coin_amount = 0.0005
+    session.destination_wallet = "bc1qga6mx70jx0uvfuk39eqpyyfwh9fsxzme75ckt7"
+    runtime.app_context.settings.data["requisites"]["single_value"] = "2200 0000 0000 0000"
 
     msg = MagicMock(spec=Message)
     msg.from_user = User(id=999, is_bot=False, first_name="Tester")
     runtime._send_requisites_selection_notice = AsyncMock()
-    sleep_mock = AsyncMock()
-    monkeypatch.setattr("app.runtime.asyncio.sleep", sleep_mock)
-    monkeypatch.setattr("app.runtime.send_state", AsyncMock())
+    runtime._get_live_rates_rub = AsyncMock(return_value={"BTC": 1_000_000.0})
+    send_state_mock = AsyncMock()
+    monkeypatch.setattr("app.runtime.send_state", send_state_mock)
 
     await runtime._send_state_by_id(msg, order_state_id, session=session)
 
-    runtime._send_requisites_selection_notice.assert_awaited_once_with(msg)
-    sleep_mock.assert_awaited_once_with(15)
+    runtime._send_requisites_selection_notice.assert_not_awaited()
+    sent_state = send_state_mock.await_args.args[1]
+    assert "Перевод на: VISA / MasterCard / MIR" in str(sent_state.get("text") or "")
+    assert "Сумма к оплате: 512 RUB" in str(sent_state.get("text") or "")
+    assert "Перевод BTC по адресу: bc1qga6mx70jx0uvfuk39eqpyyfwh9fsxzme75ckt7" in str(sent_state.get("text") or "")
+    assert "<code>2200 0000 0000 0000</code>" in str(sent_state.get("text_html") or "")
+    assert "<code>bc1qga6mx70jx0uvfuk39eqpyyfwh9fsxzme75ckt7</code>" in str(sent_state.get("text_html") or "")

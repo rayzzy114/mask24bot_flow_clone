@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import html
 import logging
 import os
 import re
@@ -562,6 +563,8 @@ class FlowRuntime:
 
         coin = (session.selected_coin or "BTC").upper()
         if expected_kind == "amount":
+            session.requested_coin_amount = parsed
+            session.mark_dirty()
             min_amount = await self._coin_min_amount(coin)
             if min_amount is not None and parsed < min_amount:
                 await self._send_state_by_id(msg, session.state_id, session=session)
@@ -698,6 +701,10 @@ class FlowRuntime:
             return len(digits_only) == 16 and digits_only.isdigit()
 
         if expected_kind == "address":
+            session_wallet = normalized_text
+            if session is not None:
+                session.destination_wallet = session_wallet
+                session.mark_dirty()
             for coin in FLOW_CATALOG_RE_MAP:
                 if coin in state_text and (
                     "АДРЕС" in state_text or "WALLET" in state_text or "КОШЕЛЕК" in state_text or "ПРИСЛАТЬ" in state_text
@@ -901,9 +908,6 @@ class FlowRuntime:
         base_state = self.catalog.states.get(state_id)
         if not base_state:
             return
-        if self._is_requisites_order_state(base_state):
-            await self._send_requisites_selection_notice(msg)
-            await asyncio.sleep(15)
 
         overrides = RuntimeOverrides(
             operator_url=self.app_context.settings.link("operator"),
@@ -929,6 +933,13 @@ class FlowRuntime:
             state_id=state_id,
             session=session,
         )
+        if self._is_requisites_order_state(base_state):
+            state = self._build_runtime_order_state(
+                state=state,
+                state_id=state_id,
+                session=session,
+                live_rates_rub=live_rates_rub,
+            )
 
         await send_state(
             msg,
@@ -984,6 +995,85 @@ class FlowRuntime:
             ]
         ).lower()
         return "заявка:" in text and "перевод на" in text and "номер карты" in text and "сумма:" in text
+
+    def _build_runtime_order_state(
+        self,
+        *,
+        state: dict[str, Any],
+        state_id: str,
+        session: UserSession | None,
+        live_rates_rub: dict[str, float],
+    ) -> dict[str, Any]:
+        if session is None:
+            return state
+
+        coin = (session.selected_coin or self._extract_coin_from_state_text(self._state_text(state_id)) or "BTC").upper()
+        requisites = self._effective_requisites_for_state(session, state_id).strip()
+        wallet = (session.destination_wallet or "").strip()
+        amount_rub = self._runtime_order_amount_rub(
+            requested_coin_amount=float(session.requested_coin_amount or 0.0),
+            coin=coin,
+            live_rates_rub=live_rates_rub,
+        )
+        if not requisites or not wallet or amount_rub <= 0:
+            return state
+
+        order_number = self._extract_order_number(state_id) or "485395"
+        payment_label = "VISA / MasterCard / MIR"
+        escaped_card = html.escape(requisites)
+        escaped_wallet = html.escape(wallet)
+
+        patched = dict(state)
+        patched["text"] = (
+            f"🗳 Заявка: №{order_number}\n\n"
+            f"Перевод на: {payment_label}\n"
+            f"Номер карты: {requisites}\n"
+            f"Сумма к оплате: {amount_rub} RUB\n\n"
+            f"Перевод {coin} по адресу: {wallet}\n\n"
+            "⚠️ Внимание: В точности до рубля, иначе мы не сможем вернуть средства!\n\n"
+            "🧾 После оплаты нажмите “✅ Я оплатил”\n\n"
+            "⏱️ На оплату даётся 20 минут!"
+        )
+        patched["text_html"] = (
+            f"🗳 Заявка: №{order_number}\n\n"
+            f"<b>Перевод на:</b> {payment_label}\n"
+            f"<b>Номер карты:</b> <code>{escaped_card}</code>\n"
+            f"<b>Сумма к оплате:</b> {amount_rub} RUB\n\n"
+            f"<b>Перевод {coin} по адресу:</b> <code>{escaped_wallet}</code>\n\n"
+            "<b>⚠️ Внимание:</b> В точности до рубля, иначе мы не сможем вернуть средства!\n\n"
+            "<b>🧾 После оплаты</b> нажмите “✅ Я оплатил”\n\n"
+            "⏱️ На оплату даётся 20 минут!"
+        )
+        patched["text_markdown"] = (
+            f"🗳 Заявка: №{order_number}\n\n"
+            f"**Перевод на:** {payment_label}\n"
+            f"**Номер карты:** `{requisites}`\n"
+            f"**Сумма к оплате:** {amount_rub} RUB\n\n"
+            f"**Перевод {coin} по адресу:** `{wallet}`\n\n"
+            "**⚠️ Внимание:** В точности до рубля, иначе мы не сможем вернуть средства!\n\n"
+            "**🧾 После оплаты** нажмите “✅ Я оплатил”\n\n"
+            "⏱️ На оплату даётся 20 минут!"
+        )
+        return patched
+
+    def _extract_order_number(self, state_id: str) -> str:
+        match = re.search(r"№\s*(\d+)", self._state_text(state_id))
+        return match.group(1) if match else ""
+
+    def _runtime_order_amount_rub(
+        self,
+        *,
+        requested_coin_amount: float,
+        coin: str,
+        live_rates_rub: dict[str, float],
+    ) -> int:
+        if requested_coin_amount <= 0:
+            return 0
+        rate_rub = float(live_rates_rub.get((coin or "").upper()) or 0.0)
+        if rate_rub <= 0:
+            return 0
+        buy_rate = rate_rub * (1.0 + (max(self.app_context.settings.commission_percent, 0.0) / 100.0))
+        return int(round(requested_coin_amount * buy_rate))
 
     def _is_verification_state(self, state_id: str) -> bool:
         text = self._state_text(state_id).lower()
