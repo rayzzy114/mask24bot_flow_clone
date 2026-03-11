@@ -444,7 +444,7 @@ class FlowRuntime:
             await msg.answer(PAYMENT_PROOF_PROMPT)
             return
 
-        if text and await self._handle_max_amount_retry(msg, session, text):
+        if text and await self._handle_amount_input(msg, session, text):
             return
 
         expected_input_kind = self._expected_input_kind(session.state_id, session=session)
@@ -548,29 +548,69 @@ class FlowRuntime:
                 logger.warning(f"Failed to send verification success media: {e}")
         await msg.answer(caption, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
 
-    async def _handle_max_amount_retry(self, msg: Message, session: UserSession, text: str) -> bool:
-        if session.state_id not in self._MAX_AMOUNT_ERROR_STATE_IDS:
+    async def _handle_amount_input(self, msg: Message, session: UserSession, text: str) -> bool:
+        expected_kind = self._expected_input_kind(session.state_id, session=session)
+        if expected_kind != "amount" and session.state_id not in self._MAX_AMOUNT_ERROR_STATE_IDS:
             return False
+
         parsed = self._parse_amount_text(text)
         if parsed is None:
-            await msg.answer("⚠️ Введите корректную сумму числом.")
-            return True
+            if expected_kind == "amount" or session.state_id in self._MAX_AMOUNT_ERROR_STATE_IDS:
+                await msg.answer("⚠️ Введите корректную сумму числом.")
+                return True
+            return False
+
         coin = (session.selected_coin or "BTC").upper()
-        live_max = await self._coin_max_amount(coin)
-        # Use the higher of the live rate and what was displayed to the user —
-        # prevents an infinite loop when the rate drifts slightly between render and input.
-        max_allowed = max(live_max, session.last_shown_max)
-        if parsed > max_allowed:
-            await self._send_state_by_id(msg, session.state_id, session=session)
-            return True
-        next_state = self.catalog.resolve_system_next(session.state_id)
+        if expected_kind == "amount":
+            min_amount = await self._coin_min_amount(coin)
+            if min_amount is not None and parsed < min_amount:
+                await self._send_state_by_id(msg, session.state_id, session=session)
+                return True
+
+        max_error_state = self._resolve_amount_max_error_state(session.state_id, text)
+        if max_error_state:
+            live_max = await self._coin_max_amount(coin)
+            max_allowed = max(live_max, session.last_shown_max)
+            if parsed > max_allowed:
+                if session.state_id != max_error_state:
+                    session.push_state(max_error_state)
+                await self._send_state_by_id(msg, max_error_state, session=session)
+                return True
+
+        next_state = self._resolve_amount_success_target(session.state_id, text)
         if not next_state:
             return True
+
         session.push_state(next_state)
         session.awaiting_payment_proof = False
         await self._send_state_by_id(msg, next_state, session=session)
         await self._send_system_chain(msg, session)
         return True
+
+    def _resolve_amount_max_error_state(self, state_id: str, text: str) -> str | None:
+        if state_id in self._MAX_AMOUNT_ERROR_STATE_IDS:
+            return state_id
+
+        direct_target = self.catalog.resolve_action(state_id, text, is_text_input=True)
+        if direct_target in self._MAX_AMOUNT_ERROR_STATE_IDS:
+            return direct_target
+        return None
+
+    def _resolve_amount_success_target(self, state_id: str, text: str) -> str | None:
+        if state_id in self._MAX_AMOUNT_ERROR_STATE_IDS:
+            action_map = self.catalog.transition_index.get(state_id) or {}
+            for special in ("<manual-input>", "<input>"):
+                targets = action_map.get(special) or []
+                if targets:
+                    return targets[0]
+            return self.catalog.resolve_system_next(state_id)
+
+        direct_target = self.catalog.resolve_action(state_id, text, is_text_input=True)
+        if direct_target and direct_target not in self._MAX_AMOUNT_ERROR_STATE_IDS:
+            return direct_target
+        if direct_target in self._MAX_AMOUNT_ERROR_STATE_IDS:
+            return self._resolve_amount_success_target(direct_target, text)
+        return None
 
     def _parse_amount_text(self, text: str) -> float | None:
         normalized = (text or "").strip().replace(" ", "").replace(",", ".")

@@ -558,6 +558,48 @@ async def test_max_amount_retry_resends_error_when_amount_too_large(runtime_ctx)
 
 
 @pytest.mark.asyncio
+async def test_btc_amount_state_valid_input_bypasses_captured_max_error(runtime_ctx):
+    runtime, _ = runtime_ctx
+    amount_state = "dd8e48ace94f57bf3eba334f6ab5b7d2"
+    wallet_state = "dfff19cf359e360e6644c920d8eb7c6b"
+    session = UserSession(state_id=amount_state, history=[amount_state], selected_coin="BTC")
+    runtime.sessions[999] = session
+    runtime._coin_max_amount = AsyncMock(return_value=0.17994790)
+    runtime._send_state_by_id = AsyncMock()
+    runtime._send_system_chain = AsyncMock()
+
+    msg = MagicMock(spec=Message)
+    msg.from_user = User(id=999, is_bot=False, first_name="Tester")
+    msg.text = "0.0005"
+
+    await runtime.on_message(msg)
+
+    assert session.state_id == wallet_state
+    runtime._send_state_by_id.assert_awaited_with(msg, wallet_state, session=session)
+
+
+@pytest.mark.asyncio
+async def test_xmr_amount_state_valid_input_bypasses_captured_max_error(runtime_ctx):
+    runtime, _ = runtime_ctx
+    amount_state = "c7dc1b492541b449585da857e71c7e29"
+    wallet_state = "7d04573c2e8a4686265d3b1a265c97c5"
+    session = UserSession(state_id=amount_state, history=[amount_state], selected_coin="XMR")
+    runtime.sessions[999] = session
+    runtime._coin_max_amount = AsyncMock(return_value=10.0)
+    runtime._send_state_by_id = AsyncMock()
+    runtime._send_system_chain = AsyncMock()
+
+    msg = MagicMock(spec=Message)
+    msg.from_user = User(id=999, is_bot=False, first_name="Tester")
+    msg.text = "0.5"
+
+    await runtime.on_message(msg)
+
+    assert session.state_id == wallet_state
+    runtime._send_state_by_id.assert_awaited_with(msg, wallet_state, session=session)
+
+
+@pytest.mark.asyncio
 async def test_apply_dynamic_amount_limits_replaces_btc_value_for_eth(runtime_ctx):
     runtime, _ = runtime_ctx
     state_id = "2fed3c394a37b41f55f21d474b5734ae"
