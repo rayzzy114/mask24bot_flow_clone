@@ -300,7 +300,8 @@ async def test_verification_photo_state_rejects_text_without_photo(runtime_ctx):
 
 
 @pytest.mark.asyncio
-async def test_zero_balance_send_shows_replenish_notice_and_stays_put(runtime_ctx):
+@pytest.mark.parametrize("action_text", ["📤 Отправить", "Вывод на карту"])
+async def test_zero_balance_send_shows_replenish_notice_and_stays_put(runtime_ctx, action_text):
     runtime, _ = runtime_ctx
     zero_balance_wallet_state = "4dd498fb2857472407baa8a4e213d9d9"
     session = UserSession(
@@ -311,7 +312,7 @@ async def test_zero_balance_send_shows_replenish_notice_and_stays_put(runtime_ct
 
     msg = MagicMock(spec=Message)
     msg.from_user = User(id=999, is_bot=False, first_name="Tester")
-    msg.text = "📤 Отправить"
+    msg.text = action_text
     msg.photo = []
     msg.answer = AsyncMock()
     runtime._send_state_by_id = AsyncMock()
@@ -320,13 +321,20 @@ async def test_zero_balance_send_shows_replenish_notice_and_stays_put(runtime_ct
 
     assert session.state_id == zero_balance_wallet_state
     msg.answer.assert_awaited_once_with(
-        "⚠️ Баланс нулевой. Отправить ничего нельзя.\n\nПополните баланс, чтобы отправить BTC."
+        "😟 Увы, отправить сейчас не получиться...\n\n"
+        "⚙️ Проводятся технические работы по улучшению сервиса,\n"
+        "\n"
+        "🕑 О сроках завершения Вы получите уведомелния в боте."
     )
     runtime._send_state_by_id.assert_not_awaited()
 
 
 @pytest.mark.asyncio
-async def test_zero_balance_send_callback_shows_replenish_notice_and_stays_put(runtime_ctx):
+@pytest.mark.parametrize(
+    ("token", "action_text"),
+    [("send_zero_token", "📤 Отправить"), ("withdraw_zero_token", "Вывод на карту")],
+)
+async def test_zero_balance_send_callback_shows_replenish_notice_and_stays_put(runtime_ctx, token, action_text):
     runtime, _ = runtime_ctx
     zero_balance_wallet_state = "4dd498fb2857472407baa8a4e213d9d9"
     session = UserSession(
@@ -335,14 +343,14 @@ async def test_zero_balance_send_callback_shows_replenish_notice_and_stays_put(r
     )
     runtime.sessions[999] = session
     runtime._send_state_by_id = AsyncMock()
-    runtime.tokens.token_to_action["send_zero_token"] = "📤 Отправить"
+    runtime.tokens.token_to_action[token] = action_text
 
     callback_message = MagicMock(spec=Message)
     callback_message.answer = AsyncMock()
 
     cb = MagicMock(spec=CallbackQuery)
     cb.from_user = User(id=999, is_bot=False, first_name="Tester")
-    cb.data = "send_zero_token"
+    cb.data = token
     cb.message = callback_message
     cb.answer = AsyncMock()
 
@@ -350,7 +358,10 @@ async def test_zero_balance_send_callback_shows_replenish_notice_and_stays_put(r
 
     assert session.state_id == zero_balance_wallet_state
     callback_message.answer.assert_awaited_once_with(
-        "⚠️ Баланс нулевой. Отправить ничего нельзя.\n\nПополните баланс, чтобы отправить BTC."
+        "😟 Увы, отправить сейчас не получиться...\n\n"
+        "⚙️ Проводятся технические работы по улучшению сервиса,\n"
+        "\n"
+        "🕑 О сроках завершения Вы получите уведомелния в боте."
     )
     runtime._send_state_by_id.assert_not_awaited()
 
@@ -1325,6 +1336,7 @@ async def test_btc_like_coins_use_runtime_prequote_before_requisites(runtime_ctx
     assert wallet in text
     assert f"<code>{wallet}</code>" in text_html
     assert "(копируется)" not in text_html
+    assert "<b>" not in text_html
 
 
 @pytest.mark.asyncio
@@ -1386,6 +1398,9 @@ async def test_usdt_bsc_requisites_state_uses_same_runtime_order_format_as_btc(r
     assert "Перевод USDT по адресу: 0x66eb0a02ecf0089fb068cc2f73a3138a2ad9156a6" in str(sent_state.get("text") or "")
     assert "<code>7777 7777 7777 7777</code>" in str(sent_state.get("text_html") or "")
     assert "<code>0x66eb0a02ecf0089fb068cc2f73a3138a2ad9156a6</code>" in str(sent_state.get("text_html") or "")
+    rows = sent_state.get("button_rows") or []
+    flat_texts = [str(btn.get("text") or "") for row in rows for btn in row if isinstance(btn, dict)]
+    assert flat_texts == ["✅ Я оплатил", "❌ Отмена"]
 
 
 @pytest.mark.asyncio
@@ -1435,6 +1450,9 @@ async def test_order_state_runtime_format_applies_to_all_supported_coins(
     assert f"<code>{wallet}</code>" in str(sent_state.get("text_html") or "")
     assert "<code>2200 0000 0000 0000</code>" in str(sent_state.get("text_html") or "")
     assert f"Сумма к оплате: {expected_amount} RUB" in str(sent_state.get("text") or "")
+    rows = sent_state.get("button_rows") or []
+    flat_texts = [str(btn.get("text") or "") for row in rows for btn in row if isinstance(btn, dict)]
+    assert flat_texts == ["✅ Я оплатил", "❌ Отмена"]
 
 
 @pytest.mark.asyncio

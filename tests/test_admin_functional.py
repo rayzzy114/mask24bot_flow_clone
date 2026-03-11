@@ -107,3 +107,16 @@ def test_admin_panel_does_not_show_manual_refresh_rates_button():
         for button in row
     ]
     assert "🔄 Обновить курсы" not in labels
+
+
+def test_admin_panel_shows_only_requested_link_buttons():
+    markup = kb_admin_panel(2.5)
+    labels = [
+        button.text
+        for row in markup.inline_keyboard
+        for button in row
+    ]
+    for expected in ("FAQ", "Тикет", "Оператор", "Чат", "Менеджер"):
+        assert expected in labels
+    for removed in ("Канал", "Отзывы", "Отзыв-форма", "Условия"):
+        assert removed not in labels

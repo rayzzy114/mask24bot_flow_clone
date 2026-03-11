@@ -1175,24 +1175,28 @@ class FlowRuntime:
         )
         patched["text_html"] = (
             f"🗳 Заявка: №{order_number}\n\n"
-            f"<b>Перевод на:</b> {payment_label}\n"
-            f"<b>Номер карты:</b> <code>{escaped_card}</code>\n"
-            f"<b>Сумма к оплате:</b> {amount_rub} RUB\n\n"
-            f"<b>Перевод {coin} по адресу:</b> <code>{escaped_wallet}</code>\n\n"
-            "<b>⚠️ Внимание:</b> В точности до рубля, иначе мы не сможем вернуть средства!\n\n"
-            "<b>🧾 После оплаты</b> нажмите “✅ Я оплатил”\n\n"
+            f"Перевод на: {payment_label}\n"
+            f"Номер карты: <code>{escaped_card}</code>\n"
+            f"Сумма к оплате: {amount_rub} RUB\n\n"
+            f"Перевод {coin} по адресу: <code>{escaped_wallet}</code>\n\n"
+            "⚠️ Внимание: В точности до рубля, иначе мы не сможем вернуть средства!\n\n"
+            "🧾 После оплаты нажмите “✅ Я оплатил”\n\n"
             "⏱️ На оплату даётся 20 минут!"
         )
         patched["text_markdown"] = (
             f"🗳 Заявка: №{order_number}\n\n"
-            f"**Перевод на:** {payment_label}\n"
-            f"**Номер карты:** `{requisites}`\n"
-            f"**Сумма к оплате:** {amount_rub} RUB\n\n"
-            f"**Перевод {coin} по адресу:** `{wallet}`\n\n"
-            "**⚠️ Внимание:** В точности до рубля, иначе мы не сможем вернуть средства!\n\n"
-            "**🧾 После оплаты** нажмите “✅ Я оплатил”\n\n"
+            f"Перевод на: {payment_label}\n"
+            f"Номер карты: `{requisites}`\n"
+            f"Сумма к оплате: {amount_rub} RUB\n\n"
+            f"Перевод {coin} по адресу: `{wallet}`\n\n"
+            "⚠️ Внимание: В точности до рубля, иначе мы не сможем вернуть средства!\n\n"
+            "🧾 После оплаты нажмите “✅ Я оплатил”\n\n"
             "⏱️ На оплату даётся 20 минут!"
         )
+        pay_btn = {"text": "✅ Я оплатил", "type": "KeyboardButtonCallback", "row": 0, "col": 0}
+        cancel_btn = {"text": "❌ Отмена", "type": "KeyboardButtonCallback", "row": 1, "col": 0}
+        patched["buttons"] = [pay_btn, cancel_btn]
+        patched["button_rows"] = [[pay_btn], [cancel_btn]]
         return patched
 
     def _extract_order_number(self, state_id: str) -> str:
@@ -1313,19 +1317,19 @@ class FlowRuntime:
             f"На кошелек: {wallet}",
         ]
         html_lines = [
-            f"📉 <b>Курс покупки {coin} (₽): {rate_label} руб.</b>",
+            f"📉 Курс покупки {coin} (₽): {rate_label} руб.",
             "",
-            f"К оплате: <b>{amount_rub} ₽</b>",
-            f"Комиссия сервиса: <b>{commission:g}%</b>",
-            f"Получите: <b>{amount_label} {coin}</b>",
+            f"К оплате: {amount_rub} ₽",
+            f"Комиссия сервиса: {commission:g}%",
+            f"Получите: {amount_label} {coin}",
             f"На кошелек: <code>{html.escape(wallet)}</code>",
         ]
         markdown_lines = [
-            f"📉 **Курс покупки {coin} (₽): {rate_label} руб.**",
+            f"📉 Курс покупки {coin} (₽): {rate_label} руб.",
             "",
-            f"К оплате: **{amount_rub} ₽**",
-            f"Комиссия сервиса: **{commission:g}%**",
-            f"Получите: **{amount_label} {coin}**",
+            f"К оплате: {amount_rub} ₽",
+            f"Комиссия сервиса: {commission:g}%",
+            f"Получите: {amount_label} {coin}",
             f"На кошелек: `{wallet}`",
         ]
         if coin == "USDT" and network:
@@ -1345,7 +1349,7 @@ class FlowRuntime:
             [
                 "Время зачисления: ~1-2 минут",
                 "",
-                "<b>ℹ️ Данные верны?</b>",
+                "ℹ️ Данные верны?",
                 'Нажмите "✅ Согласен" для получения реквизитов',
             ]
         )
@@ -1353,7 +1357,7 @@ class FlowRuntime:
             [
                 "Время зачисления: ~1-2 минут",
                 "",
-                "**ℹ️ Данные верны?**",
+                "ℹ️ Данные верны?",
                 'Нажмите "✅ Согласен" для получения реквизитов',
             ]
         )
@@ -2009,10 +2013,13 @@ class FlowRuntime:
     ) -> bool:
         if session.state_id != "4dd498fb2857472407baa8a4e213d9d9":
             return False
-        if (action_text or "").strip() != "📤 Отправить":
+        if (action_text or "").strip() not in {"📤 Отправить", "Вывод на карту"}:
             return False
         await msg.answer(
-            "⚠️ Баланс нулевой. Отправить ничего нельзя.\n\nПополните баланс, чтобы отправить BTC."
+            "😟 Увы, отправить сейчас не получиться...\n\n"
+            "⚙️ Проводятся технические работы по улучшению сервиса,\n"
+            "\n"
+            "🕑 О сроках завершения Вы получите уведомелния в боте."
         )
         return True
 

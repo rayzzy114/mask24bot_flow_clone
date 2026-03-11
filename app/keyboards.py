@@ -17,7 +17,7 @@ def kb_admin_order_confirm(order_id: str) -> InlineKeyboardMarkup:
 
 
 def kb_admin_panel(commission_percent: float) -> InlineKeyboardMarkup:
-    link_keys = list(LINK_LABELS.keys())
+    link_keys = ["faq", "support_ticket", "operator", "chat", "manager"]
     link_rows = []
     for index in range(0, len(link_keys), 2):
         row_keys = link_keys[index : index + 2]
