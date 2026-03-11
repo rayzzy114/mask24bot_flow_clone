@@ -20,6 +20,7 @@ class UserSession:
     requested_coin_amount: float = 0.0
     destination_wallet: str = ""
     pending_order_id: str = ""
+    pending_requisites_state: str = ""
     last_rendered_text: str = ""
     _dirty: bool = False # Флаг изменения
 
@@ -73,6 +74,7 @@ class UserSession:
             "requested_coin_amount": self.requested_coin_amount,
             "destination_wallet": self.destination_wallet,
             "pending_order_id": self.pending_order_id,
+            "pending_requisites_state": self.pending_requisites_state,
             "last_rendered_text": self.last_rendered_text,
         }
 
@@ -91,5 +93,6 @@ class UserSession:
             requested_coin_amount=float(data.get("requested_coin_amount", 0.0) or 0.0),
             destination_wallet=str(data.get("destination_wallet", "") or ""),
             pending_order_id=str(data.get("pending_order_id", "") or ""),
+            pending_requisites_state=str(data.get("pending_requisites_state", "") or ""),
             last_rendered_text=str(data.get("last_rendered_text", "") or ""),
         )

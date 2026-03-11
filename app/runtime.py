@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import html
+import inspect
 import logging
 import os
 import random
@@ -47,6 +48,7 @@ from .utils import (
 )
 
 logger = logging.getLogger(__name__)
+RUNTIME_PREQUOTE_STATE_ID = "__runtime_prequote__"
 
 # Configure basic logging if not already done
 if not logging.getLogger().handlers:
@@ -358,9 +360,17 @@ class FlowRuntime:
         if next_state and callback_message is not None:
             session.push_state(next_state)
             session.awaiting_payment_proof = False
-            await self._maybe_wait_before_requisites(callback_message, action_text, next_state)
+            notice_message = None
+            if self._should_wait_before_requisites(action_text, next_state):
+                await cb.answer()
+                notice_message = await self._send_requisites_selection_notice(callback_message)
+                await asyncio.sleep(random.randint(5, 12))
+            else:
+                await cb.answer()
             await self._send_state_by_id(callback_message, next_state, session=session)
             await self._send_system_chain(callback_message, session)
+            await self._delete_message_safe(notice_message)
+            return
 
         await cb.answer()
 
@@ -503,9 +513,10 @@ class FlowRuntime:
 
         session.push_state(next_state)
         session.awaiting_payment_proof = False
-        await self._maybe_wait_before_requisites(msg, text, next_state)
+        notice_message = await self._maybe_wait_before_requisites(msg, text, next_state)
         await self._send_state_by_id(msg, next_state, session=session)
         await self._send_system_chain(msg, session)
+        await self._delete_message_safe(notice_message)
 
     async def _handle_verification_photo(self, msg: Message, session: UserSession) -> None:
         """Step 1 — immediately acknowledge; Step 2 — after 15s send success."""
@@ -669,16 +680,10 @@ class FlowRuntime:
         """Try to find an explicit 'Back' edge, otherwise pop history."""
         normalized_action = self._normalize_action_text(action_text)
         is_cancel_action = ("отмена" in normalized_action) or (normalized_action == "cancel")
-        if is_cancel_action and self._is_verification_state(session.state_id):
-            # In verification flow, "Cancel" should exit the flow, not advance deeper.
-            while True:
-                prev_state = session.pop_state()
-                if prev_state is None:
-                    break
-                if not self._is_verification_state(prev_state):
-                    return prev_state
+        if is_cancel_action:
             start_sid = self.catalog.start_state_id
             if session.state_id != start_sid:
+                session.pending_requisites_state = ""
                 session.jump_to_state(start_sid, reset_history=True)
                 return start_sid
             return None
@@ -917,6 +922,22 @@ class FlowRuntime:
         return order
 
     async def _send_state_by_id(self, msg: Message, state_id: str, *, session: UserSession | None) -> None:
+        if state_id == RUNTIME_PREQUOTE_STATE_ID:
+            if session is None:
+                return
+            live_rates_rub = await self._get_live_rates_rub()
+            state = self._build_runtime_prequote_state(session=session, live_rates_rub=live_rates_rub)
+            session.last_rendered_text = str(state.get("text") or "")
+            session.mark_dirty()
+            await send_state(
+                msg,
+                state,
+                media_dir=self.media_dir,
+                media_store=self.app_context.media,
+                token_by_action=self.tokens.get_token,
+            )
+            return
+
         base_state = self.catalog.states.get(state_id)
         if not base_state:
             return
@@ -1008,29 +1029,47 @@ class FlowRuntime:
         patched["buttons"] = buttons
         return patched
 
-    async def _send_requisites_selection_notice(self, msg: Message) -> None:
-        caption = "🔎 <b>Поиск реквизитов...</b>\n\nПожалуйста, подождите 5-12 сек."
+    async def _send_requisites_selection_notice(self, msg: Message) -> Message | None:
+        caption = "🔎 <b>Идет поиск реквизитов...</b>\n\nПожалуйста, подождите 5-12 сек."
         media_path = self.media_dir / "requisites_wait.png"
         if media_path.exists():
             try:
-                await msg.answer_photo(
+                return await msg.answer_photo(
                     photo=FSInputFile(str(media_path)),
                     caption=caption,
                     parse_mode=ParseMode.HTML,
                 )
-                return
             except Exception as e:
                 logger.warning(f"Failed to send requisites wait media: {e}")
-        await msg.answer(caption, parse_mode=ParseMode.HTML)
+        return await msg.answer(caption, parse_mode=ParseMode.HTML)
 
-    async def _maybe_wait_before_requisites(self, msg: Message, action_text: str, next_state: str) -> None:
+    def _should_wait_before_requisites(self, action_text: str, next_state: str) -> bool:
         if (action_text or "").strip() != "✅ Согласен":
-            return
+            return False
         base_state = self.catalog.states.get(next_state)
         if not base_state or not self._is_requisites_order_state(base_state):
-            return
-        await self._send_requisites_selection_notice(msg)
+            return False
+        return True
+
+    async def _maybe_wait_before_requisites(self, msg: Message, action_text: str, next_state: str) -> Message | None:
+        if not self._should_wait_before_requisites(action_text, next_state):
+            return None
+        notice_message = await self._send_requisites_selection_notice(msg)
         await asyncio.sleep(random.randint(5, 12))
+        return notice_message
+
+    async def _delete_message_safe(self, message: Any) -> None:
+        if message is None:
+            return
+        delete = getattr(message, "delete", None)
+        if delete is None:
+            return
+        try:
+            result = delete()
+            if inspect.isawaitable(result):
+                await result
+        except Exception:
+            return
 
     async def _send_system_chain(self, msg: Message, session: UserSession, max_hops: int = 4) -> None:
         seen: set[str] = {session.state_id}
@@ -1218,13 +1257,112 @@ class FlowRuntime:
                 commission_percent=self.app_context.settings.commission_percent,
             )
             value = re.sub(
-                r"((?:На кошелек|На кошел[её]к)[^:\n]*:\s*)([^\n]+)",
-                lambda m: f"{m.group(1)}{wallet}",
+                r"((?:На кошелек|На кошел[её]к)[^:\n]*:\s*)([^\n]+)(?:\n\((?:копируется)\))?",
+                lambda m: self._render_runtime_quote_wallet_line(
+                    prefix=m.group(1),
+                    wallet=wallet,
+                    field=key,
+                ),
                 value,
                 flags=re.IGNORECASE,
             )
             patched[key] = value
         return patched
+
+    def _build_runtime_prequote_state(
+        self,
+        *,
+        session: UserSession,
+        live_rates_rub: dict[str, float],
+    ) -> dict[str, Any]:
+        coin = (session.selected_coin or "BTC").upper()
+        wallet = (session.destination_wallet or "").strip()
+        requested_amount = float(session.requested_coin_amount or 0.0)
+        amount_rub = self._runtime_order_amount_rub(
+            requested_coin_amount=requested_amount,
+            coin=coin,
+            live_rates_rub=live_rates_rub,
+        )
+        raw_rate = float(live_rates_rub.get(coin) or 0.0)
+        commission = max(float(self.app_context.settings.commission_percent), 0.0)
+        network = (session.selected_network or "").upper()
+        rate_label = self._format_runtime_quote_value(raw_rate, source_token=str(raw_rate))
+        amount_label = self._format_runtime_quote_value(requested_amount, source_token=str(requested_amount))
+
+        plain_lines = [
+            f"📉 Курс покупки {coin} (₽): {rate_label} руб.",
+            "",
+            f"К оплате: {amount_rub} ₽",
+            f"Комиссия сервиса: {commission:g}%",
+            f"Получите: {amount_label} {coin}",
+            f"На кошелек: {wallet}",
+            "(копируется)",
+        ]
+        html_lines = [
+            f"📉 Курс покупки {coin} (₽): {rate_label} руб.",
+            "",
+            f"<b>К оплате:</b> {amount_rub} ₽",
+            f"<b>Комиссия сервиса:</b> {commission:g}%",
+            f"<b>Получите:</b> {amount_label} {coin}",
+            f"<b>На кошелек:</b> <code>{html.escape(wallet)}</code>",
+            "<i>(копируется)</i>",
+        ]
+        markdown_lines = [
+            f"📉 Курс покупки {coin} (₽): {rate_label} руб.",
+            "",
+            f"**К оплате:** {amount_rub} ₽",
+            f"**Комиссия сервиса:** {commission:g}%",
+            f"**Получите:** {amount_label} {coin}",
+            f"**На кошелек:** `{wallet}`",
+            "_(копируется)_",
+        ]
+        if coin == "USDT" and network:
+            network_line = f"Сеть ({network}): комиссия (0.3₮) включена в оплату"
+            plain_lines.append(network_line)
+            html_lines.append(html.escape(network_line))
+            markdown_lines.append(network_line)
+        plain_lines.extend(
+            [
+                "Время зачисления: ~1-2 минут",
+                "",
+                "ℹ️ Данные верны?",
+                'Нажмите "✅ Согласен" для получения реквизитов',
+            ]
+        )
+        html_lines.extend(
+            [
+                "Время зачисления: ~1-2 минут",
+                "",
+                "<b>ℹ️ Данные верны?</b>",
+                'Нажмите "✅ Согласен" для получения реквизитов',
+            ]
+        )
+        markdown_lines.extend(
+            [
+                "Время зачисления: ~1-2 минут",
+                "",
+                "**ℹ️ Данные верны?**",
+                'Нажмите "✅ Согласен" для получения реквизитов',
+            ]
+        )
+        agree_btn = {"text": "✅ Согласен", "type": "KeyboardButtonCallback", "row": 0, "col": 0}
+        cancel_btn = {"text": "❌ Отмена", "type": "KeyboardButtonCallback", "row": 1, "col": 0}
+        return {
+            "id": RUNTIME_PREQUOTE_STATE_ID,
+            "text": "\n".join(plain_lines),
+            "text_html": "\n".join(html_lines),
+            "text_markdown": "\n".join(markdown_lines),
+            "buttons": [agree_btn, cancel_btn],
+            "button_rows": [[agree_btn], [cancel_btn]],
+        }
+
+    def _render_runtime_quote_wallet_line(self, *, prefix: str, wallet: str, field: str) -> str:
+        wallet = wallet.strip()
+        if field == "text_html":
+            return f"{prefix}<code>{html.escape(wallet)}</code>\n<i>(копируется)</i>"
+        if field == "text_markdown":
+            return f"{prefix}`{wallet}`\n_(копируется)_"
+        return f"{prefix}{wallet}\n(копируется)"
 
     def _inject_quote_commission_line(self, text: str, *, commission_percent: float) -> str:
         if not text:
@@ -1454,6 +1592,14 @@ class FlowRuntime:
         return ""
 
     def _resolve_contextual_transition(self, state_id: str, action_text: str, session: UserSession) -> str | None:
+        if state_id == RUNTIME_PREQUOTE_STATE_ID:
+            action = (action_text or "").strip()
+            if action == "✅ Согласен" and session.pending_requisites_state:
+                target = session.pending_requisites_state
+                session.pending_requisites_state = ""
+                session.mark_dirty()
+                return target
+            return None
         action_map = self.catalog.transition_index.get(state_id) or {}
         action = (action_text or "").strip()
         targets = action_map.get(action) or []
@@ -1551,7 +1697,12 @@ class FlowRuntime:
         if not targets:
             return None
         if len(targets) == 1:
-            return targets[0]
+            target = targets[0]
+            if self._should_insert_runtime_prequote(state_id, target, session):
+                session.pending_requisites_state = target
+                session.mark_dirty()
+                return RUNTIME_PREQUOTE_STATE_ID
+            return target
 
         coin = (session.selected_coin or "").upper()
         network = (session.selected_network or "").upper()
@@ -1563,7 +1714,25 @@ class FlowRuntime:
                 if network == "BSC20" and ("bsc20" in target_text or "bsc" in target_text):
                     return self._normalize_usdt_wallet_target(target)
 
-        return self.catalog.resolve_system_next(state_id)
+        target = self.catalog.resolve_system_next(state_id)
+        if target and self._should_insert_runtime_prequote(state_id, target, session):
+            session.pending_requisites_state = target
+            session.mark_dirty()
+            return RUNTIME_PREQUOTE_STATE_ID
+        return target
+
+    def _should_insert_runtime_prequote(self, state_id: str, next_state: str, session: UserSession) -> bool:
+        coin = (session.selected_coin or "").upper()
+        if coin not in {"BTC", "LTC", "ETH", "TRX", "TON"}:
+            return False
+        if state_id != "dfff19cf359e360e6644c920d8eb7c6b":
+            return False
+        if not session.destination_wallet or float(session.requested_coin_amount or 0.0) <= 0:
+            return False
+        base_state = self.catalog.states.get(next_state)
+        if not base_state or not self._is_requisites_order_state(base_state):
+            return False
+        return True
 
     def _normalize_usdt_wallet_target(self, target: str) -> str:
         target_text = self._normalize_action_text(self._state_text(target))

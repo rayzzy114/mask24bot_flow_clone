@@ -191,6 +191,49 @@ async def test_cancel_exits_verification_card_input(runtime_ctx):
 
 
 @pytest.mark.asyncio
+async def test_cancel_from_regular_order_flow_moves_to_start(runtime_ctx):
+    runtime, _ = runtime_ctx
+    order_state = "9ff74b9bf7f060310f1e52607e00c4b7"
+    start_state = runtime.catalog.start_state_id
+    session = UserSession(state_id=order_state, history=[runtime.catalog.start_state_id, order_state])
+    runtime.sessions[999] = session
+
+    msg = MagicMock(spec=Message)
+    msg.from_user = User(id=999, is_bot=False, first_name="Tester")
+    msg.text = "❌ Отмена"
+    runtime._send_state_by_id = AsyncMock()
+
+    await runtime.on_message(msg)
+
+    assert session.state_id == start_state
+    runtime._send_state_by_id.assert_awaited_with(msg, start_state, session=session)
+
+
+@pytest.mark.asyncio
+async def test_cancel_from_runtime_prequote_moves_to_start(runtime_ctx):
+    runtime, _ = runtime_ctx
+    start_state = runtime.catalog.start_state_id
+    session = UserSession(
+        state_id="__runtime_prequote__",
+        history=[start_state, "__runtime_prequote__"],
+        selected_coin="BTC",
+        pending_requisites_state="9ff74b9bf7f060310f1e52607e00c4b7",
+    )
+    runtime.sessions[999] = session
+
+    msg = MagicMock(spec=Message)
+    msg.from_user = User(id=999, is_bot=False, first_name="Tester")
+    msg.text = "❌ Отмена"
+    runtime._send_state_by_id = AsyncMock()
+
+    await runtime.on_message(msg)
+
+    assert session.state_id == start_state
+    assert session.pending_requisites_state == ""
+    runtime._send_state_by_id.assert_awaited_with(msg, start_state, session=session)
+
+
+@pytest.mark.asyncio
 async def test_invalid_verification_card_shows_card_error_and_stays_put(runtime_ctx):
     runtime, _ = runtime_ctx
     verify_offer = "cb77e2d256ec6da86cc46a9c11857718"
@@ -703,7 +746,9 @@ async def test_usdt_quote_state_uses_requested_amount_and_destination_wallet(run
     assert "Получите: 19" in text
     assert "Получите:</strong> 19" in text_html
     assert wallet in text
-    assert wallet in text_html
+    assert f"<code>{wallet}</code>" in text_html
+    assert "(копируется)" in text
+    assert "(копируется)" in text_html
     assert "Комиссия сервиса: 2.5%" in text
     assert "Комиссия сервиса: 2.5%" in text_html
     assert "Получите: 35" not in text
@@ -923,10 +968,8 @@ def test_validate_input_rejects_eth_dust_with_selected_coin(runtime_ctx):
 async def test_wallet_state_free_text_moves_to_system_next(runtime_ctx):
     runtime, _ = runtime_ctx
     wallet_state = "dfff19cf359e360e6644c920d8eb7c6b"
-    expected_next = runtime.catalog.resolve_system_next(wallet_state)
-    assert expected_next is not None
-
     session = UserSession(state_id=wallet_state, history=[runtime.catalog.start_state_id, wallet_state], selected_coin="BTC")
+    session.requested_coin_amount = 0.0005
     runtime.sessions[999] = session
     runtime._send_state_by_id = AsyncMock()
     runtime._send_system_chain = AsyncMock()
@@ -939,8 +982,9 @@ async def test_wallet_state_free_text_moves_to_system_next(runtime_ctx):
 
     await runtime.on_message(msg)
 
-    assert session.state_id == expected_next
-    runtime._send_state_by_id.assert_awaited_with(msg, expected_next, session=session)
+    assert session.state_id == "__runtime_prequote__"
+    assert session.pending_requisites_state == runtime.catalog.resolve_system_next(wallet_state)
+    runtime._send_state_by_id.assert_awaited_with(msg, "__runtime_prequote__", session=session)
 
 
 @pytest.mark.asyncio
@@ -1092,6 +1136,132 @@ async def test_quote_agree_shows_short_requisites_search_before_order_state(runt
     runtime._send_requisites_selection_notice.assert_awaited_once_with(callback_message)
     sleep_mock.assert_awaited_once_with(7)
     runtime._send_state_by_id.assert_awaited_with(callback_message, order_state_id, session=session)
+
+
+@pytest.mark.asyncio
+async def test_quote_agree_acknowledges_callback_before_waiting_for_requisites(runtime_ctx, monkeypatch):
+    runtime, _ = runtime_ctx
+    quote_state_id = "d600074b23116f8c1024a7916d46d43e"
+    order_state_id = "c470c94e034f1631e0c841615c07c46b"
+    session = UserSession(
+        state_id=quote_state_id,
+        history=[runtime.catalog.start_state_id, quote_state_id],
+        selected_coin="USDT",
+        selected_payment_method="Перевод на карту",
+    )
+    runtime.sessions[999] = session
+    runtime.tokens.token_to_action["agree_quote_token_2"] = "✅ Согласен"
+
+    events: list[str] = []
+
+    async def notice_side_effect(*args, **kwargs):
+        events.append("notice")
+
+    async def sleep_side_effect(*args, **kwargs):
+        events.append("sleep")
+
+    async def send_state_side_effect(*args, **kwargs):
+        events.append("send_state")
+
+    runtime._send_requisites_selection_notice = AsyncMock(side_effect=notice_side_effect)
+    runtime._send_state_by_id = AsyncMock(side_effect=send_state_side_effect)
+    runtime._send_system_chain = AsyncMock()
+    monkeypatch.setattr("app.runtime.asyncio.sleep", AsyncMock(side_effect=sleep_side_effect))
+    monkeypatch.setattr("app.runtime.random.randint", MagicMock(return_value=7))
+
+    callback_message = MagicMock(spec=Message)
+    callback_message.answer = AsyncMock()
+
+    async def cb_answer_side_effect(*args, **kwargs):
+        events.append("cb_answer")
+
+    cb = MagicMock(spec=CallbackQuery)
+    cb.from_user = User(id=999, is_bot=False, first_name="Tester")
+    cb.data = "agree_quote_token_2"
+    cb.message = callback_message
+    cb.answer = AsyncMock(side_effect=cb_answer_side_effect)
+
+    await runtime.on_callback(cb)
+
+    assert events == ["cb_answer", "notice", "sleep", "send_state"]
+    runtime._send_state_by_id.assert_awaited_with(callback_message, order_state_id, session=session)
+
+
+@pytest.mark.asyncio
+async def test_quote_agree_deletes_requisites_notice_after_order_sent(runtime_ctx, monkeypatch):
+    runtime, _ = runtime_ctx
+    quote_state_id = "d600074b23116f8c1024a7916d46d43e"
+    order_state_id = "c470c94e034f1631e0c841615c07c46b"
+    session = UserSession(
+        state_id=quote_state_id,
+        history=[runtime.catalog.start_state_id, quote_state_id],
+        selected_coin="USDT",
+        selected_payment_method="Перевод на карту",
+    )
+    runtime.sessions[999] = session
+    runtime.tokens.token_to_action["agree_quote_token_3"] = "✅ Согласен"
+
+    notice_message = MagicMock()
+    notice_message.delete = AsyncMock()
+    runtime._send_requisites_selection_notice = AsyncMock(return_value=notice_message)
+    runtime._send_state_by_id = AsyncMock()
+    runtime._send_system_chain = AsyncMock()
+    monkeypatch.setattr("app.runtime.asyncio.sleep", AsyncMock())
+    monkeypatch.setattr("app.runtime.random.randint", MagicMock(return_value=7))
+
+    callback_message = MagicMock(spec=Message)
+    callback_message.answer = AsyncMock()
+
+    cb = MagicMock(spec=CallbackQuery)
+    cb.from_user = User(id=999, is_bot=False, first_name="Tester")
+    cb.data = "agree_quote_token_3"
+    cb.message = callback_message
+    cb.answer = AsyncMock()
+
+    await runtime.on_callback(cb)
+
+    notice_message.delete.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_requisites_search_notice_uses_requested_wording(runtime_ctx):
+    runtime, _ = runtime_ctx
+    msg = MagicMock(spec=Message)
+    msg.answer = AsyncMock()
+    msg.answer_photo = AsyncMock(side_effect=FileNotFoundError("no media"))
+
+    await runtime._send_requisites_selection_notice(msg)
+
+    sent = msg.answer.await_args.args[0]
+    assert "Идет поиск реквизитов" in sent
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("coin", "wallet", "requested_amount", "rate"),
+    [
+        ("BTC", "bc1qga6mx70jx0uvfuk39eqpyyfwh9fsxzme75ckt7", 0.0005, 1_000_000.0),
+        ("LTC", "LbyaWJcRTHV4wxJzNYVS1nMJriEi53PA66", 0.5, 10_000.0),
+        ("ETH", "0x2b90e061a517db2bbd7e39ef7f733fd234b494ca", 0.5, 200_000.0),
+        ("TRX", "TXSpvkp9idPHzoG9nd2CwSxc8Z5SskKZ8C", 100.0, 10.0),
+        ("TON", "UQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", 10.0, 300.0),
+    ],
+)
+async def test_btc_like_coins_use_runtime_prequote_before_requisites(runtime_ctx, coin, wallet, requested_amount, rate):
+    runtime, _ = runtime_ctx
+    session = UserSession(state_id="__runtime_prequote__", selected_coin=coin, selected_payment_method="Перевод на карту")
+    session.requested_coin_amount = requested_amount
+    session.destination_wallet = wallet
+
+    state = runtime._build_runtime_prequote_state(session=session, live_rates_rub={coin: rate})
+
+    text = str(state.get("text") or "")
+    text_html = str(state.get("text_html") or "")
+    assert "Комиссия сервиса: 2.5%" in text
+    assert "(копируется)" in text
+    assert wallet in text
+    assert f"<code>{wallet}</code>" in text_html
+    assert "(копируется)" in text_html
 
 
 @pytest.mark.asyncio
