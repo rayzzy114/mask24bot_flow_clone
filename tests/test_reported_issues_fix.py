@@ -297,6 +297,53 @@ async def test_zero_balance_send_callback_shows_replenish_notice_and_stays_put(r
 
 
 @pytest.mark.asyncio
+async def test_skip_verification_moves_to_exchange_picker_not_order_state(runtime_ctx):
+    runtime, _ = runtime_ctx
+    verify_offer = "cb77e2d256ec6da86cc46a9c11857718"
+    exchange_picker = "d18a3c1f0ab4ccc32fda8910cb2ce45c"
+    bad_order_state = "38411b3ac84128632f281182e8a4f9db"
+
+    session = UserSession(state_id=verify_offer, history=[runtime.catalog.start_state_id, verify_offer])
+    runtime.sessions[999] = session
+    runtime._send_state_by_id = AsyncMock()
+    runtime._send_system_chain = AsyncMock()
+
+    msg = MagicMock(spec=Message)
+    msg.from_user = User(id=999, is_bot=False, first_name="Tester")
+    msg.text = "⏩ Пропустить"
+    msg.photo = []
+
+    await runtime.on_message(msg)
+
+    assert session.state_id == exchange_picker
+    assert session.state_id != bad_order_state
+    runtime._send_state_by_id.assert_awaited_with(msg, exchange_picker, session=session)
+
+
+@pytest.mark.asyncio
+async def test_verification_success_photo_contains_start_exchange_button(runtime_ctx):
+    runtime, _ = runtime_ctx
+    runtime.media_dir.mkdir(parents=True, exist_ok=True)
+    (runtime.media_dir / "verif.png").write_bytes(b"fake-png")
+
+    msg = MagicMock(spec=Message)
+    msg.answer = AsyncMock()
+    msg.answer_photo = AsyncMock()
+
+    await runtime._send_verification_success(msg)
+
+    assert msg.answer_photo.await_args is not None
+    reply_markup = msg.answer_photo.await_args.kwargs.get("reply_markup")
+    assert reply_markup is not None
+    button_texts = [
+        button.text
+        for row in reply_markup.inline_keyboard
+        for button in row
+    ]
+    assert "🔄 Начать обмен" in button_texts
+
+
+@pytest.mark.asyncio
 async def test_generic_invalid_input_uses_fallback_error(runtime_ctx, monkeypatch):
     runtime, catalog = runtime_ctx
     generic_state_id = "generic_invalid_input_state"
@@ -677,6 +724,7 @@ async def test_apply_dynamic_amount_limits_keeps_static_minimum_when_dynamic_una
 async def test_verification_photo_sends_delayed_success_media(runtime_ctx, monkeypatch):
     runtime, _ = runtime_ctx
     verify_photo_state = "ec7347857d2b2531cf84d3d239457019"
+    exchange_picker = "d18a3c1f0ab4ccc32fda8910cb2ce45c"
     session = UserSession(state_id=verify_photo_state, history=[verify_photo_state])
     runtime.sessions[999] = session
     runtime.media_dir.mkdir(parents=True, exist_ok=True)
@@ -709,6 +757,37 @@ async def test_verification_photo_sends_delayed_success_media(runtime_ctx, monke
     assert msg.answer_photo.await_args is not None
     assert msg.answer_photo.await_args.kwargs.get("caption") == "✅ <b>Успешная верификация!</b>"
     assert msg.answer_photo.await_args.kwargs.get("parse_mode") == ParseMode.HTML
+    assert session.state_id == exchange_picker
+
+
+@pytest.mark.asyncio
+async def test_after_successful_verification_exchange_message_is_not_blocked_by_photo_state(runtime_ctx):
+    runtime, _ = runtime_ctx
+    verify_photo_state = "ec7347857d2b2531cf84d3d239457019"
+    exchange_entry = "cb77e2d256ec6da86cc46a9c11857718"
+    session = UserSession(state_id=verify_photo_state, history=[verify_photo_state])
+    runtime.sessions[999] = session
+
+    msg = MagicMock(spec=Message)
+    msg.from_user = User(id=999, is_bot=False, first_name="Tester")
+    msg.answer = AsyncMock()
+    msg.answer_photo = AsyncMock()
+
+    await runtime._send_verification_success(msg, session=session)
+
+    assert session.state_id == "d18a3c1f0ab4ccc32fda8910cb2ce45c"
+
+    followup = MagicMock(spec=Message)
+    followup.from_user = User(id=999, is_bot=False, first_name="Tester")
+    followup.text = "Обмен"
+    followup.photo = []
+    followup.answer = AsyncMock()
+    runtime._send_state_by_id = AsyncMock()
+
+    await runtime.on_message(followup)
+
+    runtime._send_state_by_id.assert_awaited_with(followup, exchange_entry, session=session)
+    followup.answer.assert_not_awaited()
 
 
 def test_payment_proof_texts_use_bold_and_administrator_wording():

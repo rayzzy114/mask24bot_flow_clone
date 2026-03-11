@@ -15,7 +15,7 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.filters import CommandStart
 from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.types import CallbackQuery, FSInputFile, Message
+from aiogram.types import CallbackQuery, FSInputFile, InlineKeyboardButton, InlineKeyboardMarkup, Message
 from dotenv import dotenv_values, load_dotenv
 
 from .catalog import (
@@ -106,6 +106,8 @@ class FlowRuntime:
         self.payment = PaymentHandler(app_context, project_dir)
         self.global_actions: dict[str, str] = {}
         self._background_tasks: set[asyncio.Task] = set()
+        self.exchange_entry_state_id: str | None = None
+        self.exchange_picker_state_id: str | None = None
         
         self._warmup_tokens()
         self._discover_global_actions()
@@ -222,6 +224,20 @@ class FlowRuntime:
                 target = self.catalog.resolve_action(self.catalog.start_state_id, text)
                 if target:
                     self._register_global_action(text, target)
+                    if "обмен" in self._normalize_action_text(text) and not self.exchange_entry_state_id:
+                        self.exchange_entry_state_id = target
+
+        if self.exchange_entry_state_id:
+            if self._is_verification_offer_state(self.exchange_entry_state_id):
+                self.exchange_picker_state_id = self.catalog.resolve_action(
+                    self.exchange_entry_state_id,
+                    "⏩ Пропустить",
+                )
+            if not self.exchange_picker_state_id:
+                self.exchange_picker_state_id = self.exchange_entry_state_id
+
+            self._register_global_action("🔄 Начать обмен", self.exchange_picker_state_id)
+            self._register_global_action("🔄 Приступить к обмену", self.exchange_picker_state_id)
 
     def _register_global_action(self, text: str, target: str) -> None:
         self.global_actions[text] = target
@@ -299,6 +315,14 @@ class FlowRuntime:
                 await self._send_state_by_id(callback_message, prev_state, session=session)
                 await cb.answer()
                 return
+
+        shortcut_target = self._resolve_verification_shortcut(session, action_text)
+        if shortcut_target and callback_message is not None:
+            session.push_state(shortcut_target)
+            session.awaiting_payment_proof = False
+            await self._send_state_by_id(callback_message, shortcut_target, session=session)
+            await cb.answer()
+            return
 
         if callback_message is not None and await self._handle_zero_balance_send_notice(
             callback_message, session, action_text
@@ -397,6 +421,13 @@ class FlowRuntime:
                 await self._send_state_by_id(msg, prev_state, session=session)
                 return
 
+        shortcut_target = self._resolve_verification_shortcut(session, text)
+        if shortcut_target:
+            session.push_state(shortcut_target)
+            session.awaiting_payment_proof = False
+            await self._send_state_by_id(msg, shortcut_target, session=session)
+            return
+
         if text and await self._handle_zero_balance_send_notice(msg, session, text):
             return
 
@@ -494,10 +525,15 @@ class FlowRuntime:
             await msg.answer(accept_text, parse_mode=ParseMode.HTML)
 
         await asyncio.sleep(15)
-        await self._send_verification_success(msg)
+        await self._send_verification_success(msg, session=session)
 
-    async def _send_verification_success(self, msg: Message) -> None:
+    async def _send_verification_success(self, msg: Message, *, session: UserSession | None = None) -> None:
         caption = "✅ <b>Успешная верификация!</b>"
+        reply_markup = self._verification_success_markup()
+        if session is not None and (self.exchange_picker_state_id or self.exchange_entry_state_id):
+            target_state = self.exchange_picker_state_id or self.exchange_entry_state_id
+            if target_state:
+                session.jump_to_state(target_state, reset_history=False)
         media_path = self.media_dir / "verif.png"
         if media_path.exists():
             try:
@@ -505,11 +541,12 @@ class FlowRuntime:
                     photo=FSInputFile(str(media_path)),
                     caption=caption,
                     parse_mode=ParseMode.HTML,
+                    reply_markup=reply_markup,
                 )
                 return
             except Exception as e:
                 logger.warning(f"Failed to send verification success media: {e}")
-        await msg.answer(caption, parse_mode=ParseMode.HTML)
+        await msg.answer(caption, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
 
     async def _handle_max_amount_retry(self, msg: Message, session: UserSession, text: str) -> bool:
         if session.state_id not in self._MAX_AMOUNT_ERROR_STATE_IDS:
@@ -922,6 +959,32 @@ class FlowRuntime:
     def _is_verification_photo_state(self, state_id: str) -> bool:
         text = self._state_text(state_id).lower()
         return "теперь отправьте фото" in text and "секретный пароль" in text
+
+    def _is_verification_offer_state(self, state_id: str) -> bool:
+        text = self._state_text(state_id).lower()
+        return "пройдите быструю верификацию" in text and "сниженную комиссию" in text
+
+    def _resolve_verification_shortcut(self, session: UserSession, action_text: str) -> str | None:
+        if not self._is_verification_offer_state(session.state_id):
+            return None
+        if (action_text or "").strip() != "⏩ Пропустить":
+            return None
+        return self.exchange_picker_state_id or self.exchange_entry_state_id
+
+    def _verification_success_markup(self) -> InlineKeyboardMarkup | None:
+        if not self.exchange_picker_state_id:
+            return None
+        action_text = "🔄 Начать обмен"
+        return InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text=action_text,
+                        callback_data=self.tokens.get_token(action_text),
+                    )
+                ]
+            ]
+        )
 
     def _normalize_action_text(self, text: str) -> str:
         cleaned = (text or "").replace("\u00a0", " ").strip().lower()
