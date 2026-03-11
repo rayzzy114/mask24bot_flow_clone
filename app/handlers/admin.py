@@ -598,7 +598,14 @@ def build_admin_router(ctx: AppContext) -> Router:
             f"💰 Сумма: {int(order['amount_rub'])} RUB\n"
             f"💳 Способ оплаты: {order['payment_method']}"
         )
-        await msg.edit_text(text)
+        try:
+            if msg.photo or msg.video or msg.document or msg.audio or msg.voice:
+                await msg.edit_caption(caption=text)
+            else:
+                await msg.edit_text(text)
+        except Exception:
+            await msg.answer(text)
+
         try:
             bot = callback.bot
             if bot is None:
