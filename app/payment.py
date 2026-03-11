@@ -19,6 +19,7 @@ COIN_AMOUNT_RE = re.compile(
     re.IGNORECASE,
 )
 WALLET_RE = re.compile(r"(?:кошелек|кошел[её]к|wallet)\s*:?\s*([^\n]+)", re.IGNORECASE)
+ADDRESS_LINE_RE = re.compile(r"(?:перевод\s+[A-Z0-9$() ]+\s+по\s+адресу)\s*:?\s*([^\n]+)", re.IGNORECASE)
 
 
 def parse_decimal(raw: str) -> float | None:
@@ -55,6 +56,8 @@ class OrderExtractor:
             coin_symbol = coin_symbol_raw.upper()
 
         wallet_match = WALLET_RE.search(text or "")
+        if not wallet_match:
+            wallet_match = ADDRESS_LINE_RE.search(text or "")
         if wallet_match:
             wallet_value = wallet_match.group(1).strip()
             if wallet_value:

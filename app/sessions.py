@@ -19,6 +19,8 @@ class UserSession:
     last_shown_max: float = 0.0  # Max amount shown to user at last max-error state render
     requested_coin_amount: float = 0.0
     destination_wallet: str = ""
+    pending_order_id: str = ""
+    last_rendered_text: str = ""
     _dirty: bool = False # Флаг изменения
 
     def push_state(self, state_id: str) -> None:
@@ -70,6 +72,8 @@ class UserSession:
             "last_input": self.last_input,
             "requested_coin_amount": self.requested_coin_amount,
             "destination_wallet": self.destination_wallet,
+            "pending_order_id": self.pending_order_id,
+            "last_rendered_text": self.last_rendered_text,
         }
 
     @classmethod
@@ -86,4 +90,6 @@ class UserSession:
             last_input=data.get("last_input", ""),
             requested_coin_amount=float(data.get("requested_coin_amount", 0.0) or 0.0),
             destination_wallet=str(data.get("destination_wallet", "") or ""),
+            pending_order_id=str(data.get("pending_order_id", "") or ""),
+            last_rendered_text=str(data.get("last_rendered_text", "") or ""),
         )

@@ -71,6 +71,35 @@ async def test_payment_proof_creates_paid_order(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_create_paid_order_uses_pending_order_id_and_dynamic_payment_context(tmp_path: Path) -> None:
+    runtime, ctx, catalog = _runtime(tmp_path)
+    method = ctx.settings.payment_methods()[0]
+
+    session = UserSession(
+        state_id="9ff74b9bf7f060310f1e52607e00c4b7",
+        selected_payment_method=method,
+        selected_coin="USDT",
+        pending_order_id="654321",
+    )
+    session.payment_context = (
+        "🗳 Заявка: №654321\n\n"
+        "Перевод на: VISA / MasterCard / MIR\n"
+        "Номер карты: 2200 0000 0000 0000\n"
+        "Сумма к оплате: 3587 RUB\n\n"
+        "Перевод USDT по адресу: TBgHCowaEwfUe8UjYC34w3rcR9uQomzDY"
+    )
+
+    created = await runtime._create_paid_order(user_id=999, username="tester", session=session)
+    stored = ctx.orders.get_order("654321")
+
+    assert created["order_id"] == "654321"
+    assert stored is not None
+    assert stored["wallet"] == "TBgHCowaEwfUe8UjYC34w3rcR9uQomzDY"
+    assert stored["amount_rub"] == 3587.0
+    assert stored["coin_symbol"] == "USDT"
+
+
+@pytest.mark.asyncio
 async def test_split_requisites_follow_selected_method(tmp_path: Path) -> None:
     runtime, ctx, catalog = _runtime(tmp_path)
     method = ctx.settings.payment_methods()[0]

@@ -628,9 +628,10 @@ class OrdersStore:
         amount_rub: float,
         payment_method: str,
         bank: str,
+        order_id: str | None = None,
     ) -> OrderData:
         now_ts = int(time.time())
-        order_id = self._new_order_id()
+        order_id = str(order_id or "").strip() or self._new_order_id()
         order: OrderData = {
             "order_id": order_id,
             "user_id": user_id,

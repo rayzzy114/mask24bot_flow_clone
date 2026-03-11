@@ -618,6 +618,64 @@ async def test_usdt_wallet_state_uses_selected_bsc20_quote(runtime_ctx):
 
 
 @pytest.mark.asyncio
+async def test_usdt_quote_state_uses_requested_amount_and_destination_wallet(runtime_ctx, monkeypatch):
+    runtime, _ = runtime_ctx
+    quote_state = "d600074b23116f8c1024a7916d46d43e"
+    wallet = "TBgHCowaEwfUe8UjYC34w3rcR9uQomzDY"
+    session = UserSession(
+        state_id=quote_state,
+        history=[quote_state],
+        selected_coin="USDT",
+        selected_network="BSC20",
+    )
+    session.requested_coin_amount = 19.0
+    session.destination_wallet = wallet
+
+    runtime._get_live_rates_rub = AsyncMock(return_value={"USDT": 95.0})
+    send_state_mock = AsyncMock()
+    monkeypatch.setattr("app.runtime.send_state", send_state_mock)
+
+    msg = MagicMock(spec=Message)
+    msg.from_user = User(id=999, is_bot=False, first_name="Tester")
+
+    await runtime._send_state_by_id(msg, quote_state, session=session)
+
+    sent_state = send_state_mock.await_args.args[1]
+    text = str(sent_state.get("text") or "")
+    text_html = str(sent_state.get("text_html") or "")
+    assert "Получите: 19" in text
+    assert "Получите:</strong> 19" in text_html
+    assert wallet in text
+    assert wallet in text_html
+    assert "Получите: 35" not in text
+    assert "0x2b90e061a517db2bbd7e39ef7f733fd234b494ca" not in text
+
+
+@pytest.mark.asyncio
+async def test_requisites_code_block_does_not_include_braces(runtime_ctx, monkeypatch):
+    runtime, _ = runtime_ctx
+    requisites_state = "c470c94e034f1631e0c841615c07c46b"
+    runtime.app_context.settings.data["requisites"]["single_value"] = "2200 0000 0000 0000"
+    runtime._get_live_rates_rub = AsyncMock(return_value={})
+    send_state_mock = AsyncMock()
+    monkeypatch.setattr("app.runtime.send_state", send_state_mock)
+
+    msg = MagicMock(spec=Message)
+    msg.from_user = User(id=999, is_bot=False, first_name="Tester")
+
+    await runtime._send_state_by_id(
+        msg,
+        requisites_state,
+        session=UserSession(state_id=requisites_state, selected_payment_method="Перевод на карту"),
+    )
+
+    sent_state = send_state_mock.await_args.args[1]
+    assert "{}" not in str(sent_state.get("text_html") or "")
+    assert "<code" in str(sent_state.get("text_html") or "")
+    assert "2200 0000 0000 0000" in str(sent_state.get("text_html") or "")
+
+
+@pytest.mark.asyncio
 async def test_max_amount_retry_moves_forward_when_amount_is_valid(runtime_ctx):
     runtime, _ = runtime_ctx
     max_error_state = "2fed3c394a37b41f55f21d474b5734ae"
@@ -1018,3 +1076,29 @@ async def test_order_state_runtime_format_applies_to_all_supported_coins(
     assert f"<code>{wallet}</code>" in str(sent_state.get("text_html") or "")
     assert "<code>2200 0000 0000 0000</code>" in str(sent_state.get("text_html") or "")
     assert f"Сумма к оплате: {expected_amount} RUB" in str(sent_state.get("text") or "")
+
+
+@pytest.mark.asyncio
+async def test_send_state_stores_dynamic_rendered_context_in_session(runtime_ctx, monkeypatch):
+    runtime, _ = runtime_ctx
+    quote_state = "d600074b23116f8c1024a7916d46d43e"
+    session = UserSession(
+        state_id=quote_state,
+        history=[quote_state],
+        selected_coin="USDT",
+        selected_network="BSC20",
+    )
+    session.requested_coin_amount = 19.0
+    session.destination_wallet = "TBgHCowaEwfUe8UjYC34w3rcR9uQomzDY"
+    runtime.sessions[999] = session
+    runtime._get_live_rates_rub = AsyncMock(return_value={"USDT": 95.0})
+    monkeypatch.setattr("app.runtime.send_state", AsyncMock())
+
+    msg = MagicMock(spec=Message)
+    msg.from_user = User(id=999, is_bot=False, first_name="Tester")
+
+    await runtime._send_state_by_id(msg, quote_state, session=session)
+
+    assert "Получите: 19" in session.last_rendered_text
+    assert "TBgHCowaEwfUe8UjYC34w3rcR9uQomzDY" in session.last_rendered_text
+    assert "Получите: 35" not in session.last_rendered_text

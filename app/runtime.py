@@ -343,7 +343,7 @@ class FlowRuntime:
 
         if action_text == "✅ Я оплатил" and callback_message is not None:
             session.awaiting_payment_proof = True
-            session.payment_context = self._state_text(session.state_id)
+            session.payment_context = session.last_rendered_text or self._state_text(session.state_id)
             await callback_message.answer(PAYMENT_PROOF_PROMPT)
             await cb.answer()
             return
@@ -447,7 +447,7 @@ class FlowRuntime:
 
         if text == "✅ Я оплатил":
             session.awaiting_payment_proof = True
-            session.payment_context = self._state_text(session.state_id)
+            session.payment_context = session.last_rendered_text or self._state_text(session.state_id)
             await msg.answer(PAYMENT_PROOF_PROMPT)
             return
 
@@ -906,8 +906,10 @@ class FlowRuntime:
             amount_rub=details["amount_rub"],
             payment_method=payment_method,
             bank=bank,
+            order_id=session.pending_order_id or None,
         )
         await self.app_context.orders.mark_paid(order["order_id"])
+        session.pending_order_id = ""
         return order
 
     async def _send_state_by_id(self, msg: Message, state_id: str, *, session: UserSession | None) -> None:
@@ -939,6 +941,12 @@ class FlowRuntime:
             state_id=state_id,
             session=session,
         )
+        if self._is_runtime_quote_state(base_state):
+            state = self._build_runtime_quote_state(
+                state=state,
+                session=session,
+                live_rates_rub=live_rates_rub,
+            )
         if self._is_requisites_order_state(base_state):
             state = self._build_runtime_order_state(
                 state=state,
@@ -946,6 +954,9 @@ class FlowRuntime:
                 session=session,
                 live_rates_rub=live_rates_rub,
             )
+        if session is not None:
+            session.last_rendered_text = str(state.get("text") or "")
+            session.mark_dirty()
 
         await send_state(
             msg,
@@ -1002,6 +1013,16 @@ class FlowRuntime:
         ).lower()
         return "заявка:" in text and "перевод на" in text and "номер карты" in text and "сумма:" in text
 
+    def _is_runtime_quote_state(self, state: dict[str, Any]) -> bool:
+        text = "\n".join(
+            [
+                str(state.get("text") or ""),
+                str(state.get("text_html") or ""),
+                str(state.get("text_markdown") or ""),
+            ]
+        ).lower()
+        return "к оплате" in text and "получите" in text and "на кошелек" in text
+
     def _build_runtime_order_state(
         self,
         *,
@@ -1024,7 +1045,10 @@ class FlowRuntime:
         if not requisites or not wallet or amount_rub <= 0:
             return state
 
-        order_number = self._extract_order_number(state_id) or "485395"
+        if not session.pending_order_id:
+            session.pending_order_id = self.app_context.orders._new_order_id()
+            session.mark_dirty()
+        order_number = session.pending_order_id
         payment_label = "VISA / MasterCard / MIR"
         escaped_card = html.escape(requisites)
         escaped_wallet = html.escape(wallet)
@@ -1080,6 +1104,136 @@ class FlowRuntime:
             return 0
         buy_rate = rate_rub * (1.0 + (max(self.app_context.settings.commission_percent, 0.0) / 100.0))
         return int(round(requested_coin_amount * buy_rate))
+
+    def _build_runtime_quote_state(
+        self,
+        *,
+        state: dict[str, Any],
+        session: UserSession | None,
+        live_rates_rub: dict[str, float],
+    ) -> dict[str, Any]:
+        if session is None:
+            return state
+
+        requested_amount = float(session.requested_coin_amount or 0.0)
+        wallet = (session.destination_wallet or "").strip()
+        coin = (session.selected_coin or "").upper()
+        if requested_amount <= 0 or not wallet or not coin:
+            return state
+
+        amount_rub = self._runtime_order_amount_rub(
+            requested_coin_amount=requested_amount,
+            coin=coin,
+            live_rates_rub=live_rates_rub,
+        )
+        if amount_rub <= 0:
+            return state
+
+        current_receive = self._extract_quote_receive_amount(str(state.get("text") or ""))
+        multiplier = (requested_amount / current_receive) if current_receive and current_receive > 0 else 1.0
+
+        patched = dict(state)
+        for key in ("text", "text_html", "text_markdown"):
+            value = str(patched.get(key) or "")
+            if not value:
+                continue
+            value = self._rewrite_quote_line(
+                value,
+                line_hint="получите",
+                new_value=requested_amount,
+                scale_from_existing=False,
+                multiplier=1.0,
+            )
+            value = self._rewrite_quote_line(
+                value,
+                line_hint="к оплате",
+                new_value=float(amount_rub),
+                scale_from_existing=False,
+                multiplier=1.0,
+            )
+            value = self._rewrite_quote_line(
+                value,
+                line_hint="с учетом скидки",
+                new_value=float(amount_rub),
+                scale_from_existing=True,
+                multiplier=multiplier,
+            )
+            value = re.sub(
+                r"((?:На кошелек|На кошел[её]к)[^:\n]*:\s*)([^\n]+)",
+                lambda m: f"{m.group(1)}{wallet}",
+                value,
+                flags=re.IGNORECASE,
+            )
+            patched[key] = value
+        return patched
+
+    def _extract_quote_receive_amount(self, text: str) -> float | None:
+        match = re.search(r"Получите:\s*([0-9]+(?:[.,][0-9]+)?)", text, flags=re.IGNORECASE)
+        if not match:
+            return None
+        try:
+            return float(match.group(1).replace(",", "."))
+        except ValueError:
+            return None
+
+    def _rewrite_quote_line(
+        self,
+        text: str,
+        *,
+        line_hint: str,
+        new_value: float,
+        scale_from_existing: bool,
+        multiplier: float,
+    ) -> str:
+        out_lines: list[str] = []
+        for line in text.splitlines():
+            normalized = line.lower()
+            if line_hint not in normalized:
+                out_lines.append(line)
+                continue
+
+            match = re.search(r"([0-9][0-9 .,]*[0-9]|[0-9]+(?:[.,][0-9]+)?)", line)
+            if not match:
+                out_lines.append(line)
+                continue
+
+            target_value = new_value
+            if scale_from_existing:
+                old_value = self._parse_display_number(match.group(1))
+                if old_value is not None:
+                    target_value = old_value * multiplier
+
+            rendered = self._format_runtime_quote_value(target_value, source_token=match.group(1))
+            line = line[: match.start(1)] + rendered + line[match.end(1) :]
+            out_lines.append(line)
+        return "\n".join(out_lines)
+
+    def _parse_display_number(self, token: str) -> float | None:
+        cleaned = (token or "").replace("\u00a0", " ").replace(" ", "")
+        if "." in cleaned and "," in cleaned:
+            if cleaned.rfind(".") > cleaned.rfind(","):
+                cleaned = cleaned.replace(",", "")
+            else:
+                cleaned = cleaned.replace(".", "").replace(",", ".")
+        else:
+            cleaned = cleaned.replace(",", ".")
+        cleaned = re.sub(r"[^0-9.]", "", cleaned)
+        if not cleaned or cleaned.count(".") > 1:
+            return None
+        try:
+            return float(cleaned)
+        except ValueError:
+            return None
+
+    def _format_runtime_quote_value(self, value: float, *, source_token: str) -> str:
+        if abs(value - round(value)) < 1e-9:
+            return f"{int(round(value))}"
+        if "." in source_token or "," in source_token:
+            decimals = len(source_token.rsplit("." if "." in source_token else ",", 1)[-1])
+            rendered = f"{value:.{max(decimals, 1)}f}"
+        else:
+            rendered = f"{value:.8f}"
+        return rendered.rstrip("0").rstrip(".")
 
     def _is_verification_state(self, state_id: str) -> bool:
         text = self._state_text(state_id).lower()
