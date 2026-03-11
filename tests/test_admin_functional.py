@@ -2,6 +2,7 @@ import pytest
 from unittest.mock import MagicMock
 
 from app.context import AppContext
+from app.keyboards import kb_admin_panel
 from app.storage import SettingsStore, UsersStore, OrdersStore, SessionsStore, MediaStore
 from app.rates import RateService
 from app.constants import DEFAULT_LINKS
@@ -96,3 +97,13 @@ async def test_sell_wallets_logic(mock_ctx):
 def test_admin_ids_parse_includes_requested_operator_id():
     admin_ids = parse_admin_ids("6131246501,8174646481")
     assert 8174646481 in admin_ids
+
+
+def test_admin_panel_does_not_show_manual_refresh_rates_button():
+    markup = kb_admin_panel(2.5)
+    labels = [
+        button.text
+        for row in markup.inline_keyboard
+        for button in row
+    ]
+    assert "🔄 Обновить курсы" not in labels

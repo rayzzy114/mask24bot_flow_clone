@@ -39,7 +39,6 @@ def kb_admin_panel(commission_percent: float) -> InlineKeyboardMarkup:
                 InlineKeyboardButton(text="Условия", callback_data="admin:set_link:terms"),
             ],
             [InlineKeyboardButton(text="🪙 Кошельки продажи", callback_data="admin:sell_wallets")],
-            [InlineKeyboardButton(text="🔄 Обновить курсы", callback_data="admin:rates")],
         ]
     )
 

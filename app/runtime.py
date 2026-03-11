@@ -257,6 +257,7 @@ class FlowRuntime:
         if user is None:
             return
         user_id = int(user.id)
+        await self.app_context.rates.get_rates(force=True)
         start_sid = self.catalog.start_state_id
         session = UserSession(state_id=start_sid, history=[start_sid])
         self.sessions[user_id] = session

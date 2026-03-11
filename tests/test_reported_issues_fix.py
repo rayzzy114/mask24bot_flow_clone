@@ -58,6 +58,22 @@ async def test_fix_back_button_after_global_jump(runtime_ctx):
     await runtime.on_message(msg)
     assert session.state_id == state_b
 
+
+@pytest.mark.asyncio
+async def test_start_forces_live_rate_refresh(runtime_ctx):
+    runtime, catalog = runtime_ctx
+    runtime.app_context.rates.get_rates = AsyncMock(return_value={"btc": 1.0, "usdt": 1.0})
+    runtime._send_state_by_id = AsyncMock()
+
+    msg = MagicMock(spec=Message)
+    msg.from_user = User(id=999, is_bot=False, first_name="Tester")
+
+    await runtime.start(msg)
+
+    runtime.app_context.rates.get_rates.assert_awaited_once_with(force=True)
+    runtime._send_state_by_id.assert_awaited_once()
+    assert runtime._send_state_by_id.await_args.args[1] == catalog.start_state_id
+
 @pytest.mark.asyncio
 async def test_fix_validation_for_invalid_amount(runtime_ctx):
     runtime, catalog = runtime_ctx
