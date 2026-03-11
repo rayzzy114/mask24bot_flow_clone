@@ -116,7 +116,7 @@ def test_admin_panel_shows_only_requested_link_buttons():
         for row in markup.inline_keyboard
         for button in row
     ]
-    for expected in ("FAQ", "Тикет", "Оператор", "Чат", "Менеджер"):
+    for expected in ("FAQ", "Тикет", "Оператор"):
         assert expected in labels
-    for removed in ("Канал", "Отзывы", "Отзыв-форма", "Условия"):
+    for removed in ("Канал", "Отзывы", "Отзыв-форма", "Условия", "Чат", "Менеджер"):
         assert removed not in labels

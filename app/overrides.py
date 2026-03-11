@@ -23,6 +23,21 @@ class RuntimeOverrides:
     commission_percent: float = 0.0
 
 
+FAQ_FALLBACK_KEYS = (
+    "terms",
+    "wallet_help",
+    "user_agreement",
+    "getting_started",
+    "withdrawal_help",
+    "pax_code_help",
+    "exchange_btc_help",
+    "exchange_ltc_help",
+    "exchange_usdt_help",
+    "exchange_xmr_help",
+    "promo_help",
+)
+
+
 def normalize_operator_url(value: str) -> str:
     raw = (value or "").strip()
     if not raw:
@@ -62,6 +77,7 @@ def apply_state_overrides(
     live_rates_rub: dict[str, float] | None = None,
 ) -> dict[str, Any]:
     updated = copy.deepcopy(state)
+    effective_link_overrides = _expand_link_overrides(overrides.link_overrides)
 
     target_operator_url = normalize_operator_url(overrides.operator_url)
     target_operator_handle = extract_operator_handle(target_operator_url).lower()
@@ -77,10 +93,10 @@ def apply_state_overrides(
             if target_operator_handle:
                 value = _replace_operator_handles(value, operator_handle_aliases, target_operator_handle)
 
-        if overrides.link_overrides and link_url_aliases:
+        if effective_link_overrides and link_url_aliases:
             value = _replace_link_urls(
                 value,
-                link_overrides=overrides.link_overrides,
+                link_overrides=effective_link_overrides,
                 link_url_aliases=link_url_aliases,
                 skip_keys={"operator"},
             )
@@ -115,10 +131,10 @@ def apply_state_overrides(
             patched = link
             if target_operator_url and _is_same_url(link, operator_url_aliases):
                 patched = target_operator_url
-            elif overrides.link_overrides and link_url_aliases:
+            elif effective_link_overrides and link_url_aliases:
                 patched = _replace_single_link_url(
                     link,
-                    link_overrides=overrides.link_overrides,
+                    link_overrides=effective_link_overrides,
                     link_url_aliases=link_url_aliases,
                     skip_keys={"operator"},
                 )
@@ -131,7 +147,7 @@ def apply_state_overrides(
         target_operator_handle=target_operator_handle,
         operator_url_aliases=operator_url_aliases,
         operator_handle_aliases=operator_handle_aliases,
-        link_overrides=overrides.link_overrides,
+        link_overrides=effective_link_overrides,
         link_url_aliases=link_url_aliases or {},
         sell_wallet_overrides=overrides.sell_wallet_overrides,
         sell_wallet_aliases=sell_wallet_aliases or {},
@@ -140,6 +156,15 @@ def apply_state_overrides(
     )
 
     return updated
+
+
+def _expand_link_overrides(link_overrides: dict[str, str]) -> dict[str, str]:
+    expanded = dict(link_overrides)
+    faq_value = normalize_operator_url(expanded.get("faq", ""))
+    if faq_value:
+        for key in FAQ_FALLBACK_KEYS:
+            expanded.setdefault(key, faq_value)
+    return expanded
 
 
 def _replace_live_rates(

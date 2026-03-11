@@ -169,6 +169,7 @@ def test_single_mode_requisites_are_applied_consistently_to_all_order_states(tmp
 async def test_send_state_by_id_applies_admin_overrides_in_runtime_pipeline(tmp_path: Path, monkeypatch) -> None:
     runtime, ctx, catalog = _runtime(tmp_path)
 
+    await ctx.settings.set_link("faq", "https://example.com/runtime-faq")
     await ctx.settings.set_link("operator", "https://t.me/runtime_operator_777")
     await ctx.settings.set_link("terms", "https://example.com/runtime-terms")
     await ctx.settings.set_link("support_ticket", "https://t.me/runtime_ticket_777")
@@ -267,18 +268,18 @@ async def test_send_state_by_id_applies_admin_overrides_in_runtime_pipeline(tmp_
         terms_state_id,
         session=UserSession(state_id=terms_state_id),
     )
-    terms_state = send_state_mock.await_args_list[-1].args[1]
-    terms_urls = {
+    faq_backed_state = send_state_mock.await_args_list[-1].args[1]
+    faq_urls = {
         str(link)
-        for link in (terms_state.get("text_links") or [])
+        for link in (faq_backed_state.get("text_links") or [])
         if isinstance(link, str)
     }
-    for row in terms_state.get("button_rows") or []:
+    for row in faq_backed_state.get("button_rows") or []:
         if isinstance(row, list):
             for btn in row:
                 if isinstance(btn, dict) and btn.get("url"):
-                    terms_urls.add(str(btn["url"]))
-    assert "https://example.com/runtime-terms" in terms_urls
+                    faq_urls.add(str(btn["url"]))
+    assert "https://example.com/runtime-faq" in faq_urls
 
     await runtime._send_state_by_id(
         msg,
@@ -297,6 +298,24 @@ async def test_send_state_by_id_applies_admin_overrides_in_runtime_pipeline(tmp_
                 if isinstance(btn, dict) and btn.get("url"):
                     support_ticket_urls.add(str(btn["url"]))
     assert "https://t.me/runtime_ticket_777" in support_ticket_urls
+
+    await runtime._send_state_by_id(
+        msg,
+        terms_state_id,
+        session=UserSession(state_id=terms_state_id),
+    )
+    terms_state = send_state_mock.await_args_list[-1].args[1]
+    terms_urls = {
+        str(link)
+        for link in (terms_state.get("text_links") or [])
+        if isinstance(link, str)
+    }
+    for row in terms_state.get("button_rows") or []:
+        if isinstance(row, list):
+            for btn in row:
+                if isinstance(btn, dict) and btn.get("url"):
+                    terms_urls.add(str(btn["url"]))
+    assert "https://example.com/runtime-terms" in terms_urls
 
     await runtime._send_state_by_id(
         msg,
