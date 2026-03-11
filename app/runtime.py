@@ -74,8 +74,8 @@ def state_button_rows(state: dict[str, Any]) -> list[list[dict[str, Any]]]:
 
 
 class FlowRuntime:
-    _MAX_AMOUNT_USD_BUDGET = 100.0
-    _MIN_AMOUNT_BTC_BASE = 0.00004960
+    _MAX_AMOUNT_RUB_BUDGET = 1_000_000.0
+    _MIN_AMOUNT_RUB_BUDGET = 1_500.0
     _AMOUNT_DUST_FLOOR = 0.00001
     _MAX_AMOUNT_ERROR_STATE_IDS = {
         "2fed3c394a37b41f55f21d474b5734ae",  # BTC max error
@@ -506,26 +506,30 @@ class FlowRuntime:
 
     async def _coin_max_amount(self, coin: str) -> float:
         symbol = (coin or "BTC").upper()
-        rates = await self._get_live_rates_rub()
-        usdt_rate = float(rates.get("USDT") or 0.0)
-        coin_rate = float(rates.get(symbol) or 0.0)
         if symbol == "USDT":
-            return self._MAX_AMOUNT_USD_BUDGET
-        if usdt_rate > 0 and coin_rate > 0:
-            rub_budget = self._MAX_AMOUNT_USD_BUDGET * usdt_rate
-            return rub_budget / coin_rate
-        return self._MAX_AMOUNT_USD_BUDGET
+            rates = await self._get_live_rates_rub()
+            usdt_rate = float(rates.get("USDT") or 0.0)
+            if usdt_rate > 0:
+                return self._MAX_AMOUNT_RUB_BUDGET / usdt_rate
+            return self._MAX_AMOUNT_RUB_BUDGET
+        rates = await self._get_live_rates_rub()
+        coin_rate = float(rates.get(symbol) or 0.0)
+        if coin_rate > 0:
+            return self._MAX_AMOUNT_RUB_BUDGET / coin_rate
+        return self._MAX_AMOUNT_RUB_BUDGET
 
     async def _coin_min_amount(self, coin: str) -> float | None:
         symbol = (coin or "BTC").upper()
-        if symbol == "BTC":
-            return self._MIN_AMOUNT_BTC_BASE
+        if symbol == "USDT":
+            rates = await self._get_live_rates_rub()
+            usdt_rate = float(rates.get("USDT") or 0.0)
+            if usdt_rate > 0:
+                return self._MIN_AMOUNT_RUB_BUDGET / usdt_rate
+            return None
         rates = await self._get_live_rates_rub()
-        btc_rate = float(rates.get("BTC") or 0.0)
         coin_rate = float(rates.get(symbol) or 0.0)
-        if btc_rate > 0 and coin_rate > 0:
-            rub_min = self._MIN_AMOUNT_BTC_BASE * btc_rate
-            return rub_min / coin_rate
+        if coin_rate > 0:
+            return self._MIN_AMOUNT_RUB_BUDGET / coin_rate
         return None
 
     def _resolve_back_state(self, session: UserSession, action_text: str) -> str | None:

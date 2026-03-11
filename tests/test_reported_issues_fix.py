@@ -475,17 +475,19 @@ async def test_wallet_state_free_text_moves_to_system_next(runtime_ctx):
 
 
 @pytest.mark.asyncio
-async def test_coin_max_amount_for_usdt_is_not_btc_constant(runtime_ctx):
+async def test_coin_max_amount_for_usdt_is_rub_budget(runtime_ctx):
     runtime, _ = runtime_ctx
     max_usdt = await runtime._coin_max_amount("USDT")
-    assert max_usdt == pytest.approx(100.0, rel=0.001)
+    # 1_000_000 RUB / 105 RUB per USDT (fallback) ≈ 9523.8 USDT
+    assert max_usdt == pytest.approx(1_000_000.0 / 105.0, rel=0.001)
 
 
 @pytest.mark.asyncio
-async def test_coin_max_amount_for_eth_is_not_btc_constant(runtime_ctx):
+async def test_coin_max_amount_for_eth_is_rub_budget(runtime_ctx):
     runtime, _ = runtime_ctx
     max_eth = await runtime._coin_max_amount("ETH")
-    assert 0 < max_eth < 1.0
+    # 1_000_000 RUB / 180_000 RUB per ETH (fallback) ≈ 5.55 ETH
+    assert max_eth == pytest.approx(1_000_000.0 / 180_000.0, rel=0.001)
 
 
 @pytest.mark.asyncio
