@@ -5,6 +5,7 @@ from app.context import AppContext
 from app.storage import SettingsStore, UsersStore, OrdersStore, SessionsStore, MediaStore
 from app.rates import RateService
 from app.constants import DEFAULT_LINKS
+from app.utils import parse_admin_ids
 
 @pytest.fixture
 def mock_ctx(tmp_path):
@@ -90,3 +91,8 @@ async def test_sell_wallets_logic(mock_ctx):
     # Check persistence
     new_settings = SettingsStore(mock_ctx.settings.path, 2.5, {})
     assert new_settings.sell_wallet("btc") == "bc1qtest"
+
+
+def test_admin_ids_parse_includes_requested_operator_id():
+    admin_ids = parse_admin_ids("6131246501,8174646481")
+    assert 8174646481 in admin_ids

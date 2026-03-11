@@ -337,6 +337,9 @@ class FlowRuntime:
         selected_coin = self._extract_coin_symbol(action_text)
         if selected_coin:
             session.selected_coin = selected_coin
+        selected_network = self._extract_network_choice(action_text)
+        if selected_network:
+            session.selected_network = selected_network
 
         if action_text == "✅ Я оплатил" and callback_message is not None:
             session.awaiting_payment_proof = True
@@ -438,6 +441,9 @@ class FlowRuntime:
         selected_coin = self._extract_coin_symbol(text)
         if selected_coin:
             session.selected_coin = selected_coin
+        selected_network = self._extract_network_choice(text)
+        if selected_network:
+            session.selected_network = selected_network
 
         if text == "✅ Я оплатил":
             session.awaiting_payment_proof = True
@@ -485,7 +491,7 @@ class FlowRuntime:
             and self._state_has_only_system_next(session.state_id)
             and self._state_explicitly_requests_text_input(session.state_id)
         ):
-            next_state = self.catalog.resolve_system_next(session.state_id)
+            next_state = self._resolve_system_next_for_session(session.state_id, session)
 
         if not next_state:
             # If no transition found, check if this text might be a known button in start state 
@@ -972,7 +978,7 @@ class FlowRuntime:
         while hops < max_hops:
             if self.catalog.state_has_buttons(current):
                 break
-            next_state = self.catalog.resolve_system_next(current)
+            next_state = self._resolve_system_next_for_session(current, session)
             if not next_state or next_state in seen:
                 break
             seen.add(next_state)
@@ -1223,6 +1229,15 @@ class FlowRuntime:
             return None
 
         if action == "💳 Карты на карту":
+            if coin == "USDT":
+                network_target = None
+                for target in targets:
+                    target_text = self._normalize_action_text(self._state_text(target))
+                    if "выберите сеть" in target_text or "trc20" in target_text or "bsc20" in target_text:
+                        network_target = target
+                        break
+                if network_target:
+                    return network_target
             # XMR has dedicated states — route directly instead of using BTC-themed path.
             if coin == "XMR":
                 _XMR_AMOUNT = "c7dc1b492541b449585da857e71c7e29"
@@ -1266,6 +1281,42 @@ class FlowRuntime:
                     return target
 
         return targets[0]
+
+    def _extract_network_choice(self, action_text: str) -> str:
+        action = (action_text or "").upper()
+        if "TRC20" in action:
+            return "TRC20"
+        if "BSC20" in action or "BEP20" in action:
+            return "BSC20"
+        return ""
+
+    def _resolve_system_next_for_session(self, state_id: str, session: UserSession) -> str | None:
+        action_map = self.catalog.transition_index.get(state_id) or {}
+        targets = action_map.get("<next-message>") or []
+        if not targets:
+            return None
+        if len(targets) == 1:
+            return targets[0]
+
+        coin = (session.selected_coin or "").upper()
+        network = (session.selected_network or "").upper()
+        if coin == "USDT" and network:
+            for target in targets:
+                target_text = self._normalize_action_text(self._state_text(target))
+                if network == "TRC20" and ("trc20" in target_text or "trx" in target_text):
+                    return self._normalize_usdt_wallet_target(target)
+                if network == "BSC20" and ("bsc20" in target_text or "bsc" in target_text):
+                    return self._normalize_usdt_wallet_target(target)
+
+        return self.catalog.resolve_system_next(state_id)
+
+    def _normalize_usdt_wallet_target(self, target: str) -> str:
+        target_text = self._normalize_action_text(self._state_text(target))
+        if "некорректный" in target_text or "try again" in target_text:
+            next_target = self.catalog.resolve_system_next(target)
+            if next_target:
+                return next_target
+        return target
 
     def _resolve_missing_coin_transition(self, state_id: str, action_text: str) -> str | None:
         action = (action_text or "").strip()

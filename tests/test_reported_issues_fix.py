@@ -433,14 +433,22 @@ def test_variant_back_label_is_detected(runtime_ctx):
     assert runtime._is_back_action("🔙 Нет промо, назад")
 
 
-@pytest.mark.parametrize("coin", ["BTC", "LTC", "USDT", "ETH"])
-def test_contextual_payment_route_for_all_crypto_coins_to_btc_flow(runtime_ctx, coin):
+@pytest.mark.parametrize(
+    ("coin", "expected_target"),
+    [
+        ("BTC", "dd8e48ace94f57bf3eba334f6ab5b7d2"),
+        ("LTC", "dd8e48ace94f57bf3eba334f6ab5b7d2"),
+        ("USDT", "f29257f079d6fcdcb4dccc7ccf79bf53"),
+        ("ETH", "dd8e48ace94f57bf3eba334f6ab5b7d2"),
+    ],
+)
+def test_contextual_payment_route_for_supported_crypto_flows(runtime_ctx, coin, expected_target):
     runtime, _ = runtime_ctx
     payment_state = "230eb12bd9b1d8c5aea8da3109ab23ab"
     session = UserSession(state_id=payment_state, history=[payment_state], selected_coin=coin)
 
     target = runtime._resolve_contextual_transition(payment_state, "💳 Карты на карту", session)
-    assert target == "dd8e48ace94f57bf3eba334f6ab5b7d2"
+    assert target == expected_target
 
 
 def test_contextual_payment_route_for_xmr_to_dedicated_state(runtime_ctx):
@@ -515,6 +523,98 @@ def test_extract_coin_symbol_for_usdt_network_buttons(runtime_ctx, button_text):
 def test_extract_coin_symbol_unknown_parenthesized_symbol_returns_empty(runtime_ctx):
     runtime, _ = runtime_ctx
     assert runtime._extract_coin_symbol("Foo (XYZ)") == ""
+
+
+@pytest.mark.asyncio
+async def test_usdt_card_to_card_opens_network_picker(runtime_ctx):
+    runtime, _ = runtime_ctx
+    method_state = "230eb12bd9b1d8c5aea8da3109ab23ab"
+    network_picker = "f29257f079d6fcdcb4dccc7ccf79bf53"
+    session = UserSession(state_id=method_state, history=[method_state], selected_coin="USDT")
+    runtime.sessions[999] = session
+    runtime._send_state_by_id = AsyncMock()
+
+    msg = MagicMock(spec=Message)
+    msg.from_user = User(id=999, is_bot=False, first_name="Tester")
+    msg.text = "💳 Карты на карту"
+
+    await runtime.on_message(msg)
+
+    assert session.state_id == network_picker
+    runtime._send_state_by_id.assert_awaited_with(msg, network_picker, session=session)
+
+
+@pytest.mark.asyncio
+async def test_usdt_network_choice_is_remembered_for_trc20(runtime_ctx):
+    runtime, _ = runtime_ctx
+    network_picker = "f29257f079d6fcdcb4dccc7ccf79bf53"
+    amount_state = "d10355801a11f2d98b2f14663355934e"
+    session = UserSession(state_id=network_picker, history=[network_picker], selected_coin="USDT")
+    runtime.sessions[999] = session
+    runtime._send_state_by_id = AsyncMock()
+
+    msg = MagicMock(spec=Message)
+    msg.from_user = User(id=999, is_bot=False, first_name="Tester")
+    msg.text = "USDT (TRC20)"
+
+    await runtime.on_message(msg)
+
+    assert session.state_id == amount_state
+    assert session.selected_network == "TRC20"
+
+
+@pytest.mark.asyncio
+async def test_usdt_wallet_state_uses_selected_trc20_quote(runtime_ctx):
+    runtime, _ = runtime_ctx
+    wallet_state = "7ce70c281eb57574028a6b6d3a63013b"
+    trc20_quote = "4a985fd53a6cf0fb74877721f588a4d0"
+    session = UserSession(
+        state_id=wallet_state,
+        history=[wallet_state],
+        selected_coin="USDT",
+        selected_network="TRC20",
+    )
+    runtime.sessions[999] = session
+    runtime._send_state_by_id = AsyncMock()
+    runtime._send_system_chain = AsyncMock()
+
+    msg = MagicMock(spec=Message)
+    msg.from_user = User(id=999, is_bot=False, first_name="Tester")
+    msg.text = "TR4D37Xfnr52cEPAtnvf5X9vVGFCqeiRX3"
+    msg.caption = None
+    msg.photo = []
+
+    await runtime.on_message(msg)
+
+    assert session.state_id == trc20_quote
+    runtime._send_state_by_id.assert_awaited_with(msg, trc20_quote, session=session)
+
+
+@pytest.mark.asyncio
+async def test_usdt_wallet_state_uses_selected_bsc20_quote(runtime_ctx):
+    runtime, _ = runtime_ctx
+    wallet_state = "7ce70c281eb57574028a6b6d3a63013b"
+    bsc20_quote = "d600074b23116f8c1024a7916d46d43e"
+    session = UserSession(
+        state_id=wallet_state,
+        history=[wallet_state],
+        selected_coin="USDT",
+        selected_network="BSC20",
+    )
+    runtime.sessions[999] = session
+    runtime._send_state_by_id = AsyncMock()
+    runtime._send_system_chain = AsyncMock()
+
+    msg = MagicMock(spec=Message)
+    msg.from_user = User(id=999, is_bot=False, first_name="Tester")
+    msg.text = "0x2b90e061a517db2bbd7e39ef7f733fd234b494ca"
+    msg.caption = None
+    msg.photo = []
+
+    await runtime.on_message(msg)
+
+    assert session.state_id == bsc20_quote
+    runtime._send_state_by_id.assert_awaited_with(msg, bsc20_quote, session=session)
 
 
 @pytest.mark.asyncio
@@ -869,3 +969,52 @@ async def test_order_state_skips_wait_notice_and_uses_copyable_payment_format(ru
     assert "Перевод BTC по адресу: bc1qga6mx70jx0uvfuk39eqpyyfwh9fsxzme75ckt7" in str(sent_state.get("text") or "")
     assert "<code>2200 0000 0000 0000</code>" in str(sent_state.get("text_html") or "")
     assert "<code>bc1qga6mx70jx0uvfuk39eqpyyfwh9fsxzme75ckt7</code>" in str(sent_state.get("text_html") or "")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("coin", "wallet", "requested_amount", "rate", "expected_amount"),
+    [
+        ("BTC", "bc1qga6mx70jx0uvfuk39eqpyyfwh9fsxzme75ckt7", 0.0005, 1_000_000.0, 512),
+        ("LTC", "LbyaWJcRTHV4wxJzNYVS1nMJriEi53PA66", 0.5, 10_000.0, 5125),
+        ("USDT", "TR4D37Xfnr52cEPAtnvf5X9vVGFCqeiRX3", 35.0, 100.0, 3587),
+        ("ETH", "0x2b90e061a517db2bbd7e39ef7f733fd234b494ca", 0.5, 200_000.0, 102500),
+        ("XMR", "48CCnW8vhWf32Zw4aVnqezHdq9wSA4XeFF2tTdWfAqPSQq7uDwqxmvLGB1mLMMWEDj66cxvfz1R4ASJxpX94TN9qG5xBDeP", 0.5, 300_000.0, 153750),
+        ("TRX", "TXSpvkp9idPHzoG9nd2CwSxc8Z5SskKZ8C", 100.0, 10.0, 1025),
+        ("TON", "UQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", 10.0, 300.0, 3075),
+    ],
+)
+async def test_order_state_runtime_format_applies_to_all_supported_coins(
+    runtime_ctx,
+    monkeypatch,
+    coin,
+    wallet,
+    requested_amount,
+    rate,
+    expected_amount,
+):
+    runtime, _ = runtime_ctx
+    order_state_id = "9ff74b9bf7f060310f1e52607e00c4b7"
+    session = UserSession(
+        state_id=order_state_id,
+        history=[runtime.catalog.start_state_id, order_state_id],
+        selected_coin=coin,
+        selected_payment_method="Перевод на карту",
+    )
+    session.requested_coin_amount = requested_amount
+    session.destination_wallet = wallet
+    runtime.app_context.settings.data["requisites"]["single_value"] = "2200 0000 0000 0000"
+
+    msg = MagicMock(spec=Message)
+    msg.from_user = User(id=999, is_bot=False, first_name="Tester")
+    runtime._get_live_rates_rub = AsyncMock(return_value={coin: rate})
+    send_state_mock = AsyncMock()
+    monkeypatch.setattr("app.runtime.send_state", send_state_mock)
+
+    await runtime._send_state_by_id(msg, order_state_id, session=session)
+
+    sent_state = send_state_mock.await_args.args[1]
+    assert f"Перевод {coin} по адресу: {wallet}" in str(sent_state.get("text") or "")
+    assert f"<code>{wallet}</code>" in str(sent_state.get("text_html") or "")
+    assert "<code>2200 0000 0000 0000</code>" in str(sent_state.get("text_html") or "")
+    assert f"Сумма к оплате: {expected_amount} RUB" in str(sent_state.get("text") or "")

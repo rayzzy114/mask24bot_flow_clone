@@ -12,6 +12,7 @@ class UserSession:
     payment_context: str = ""
     selected_payment_method: str = ""
     selected_coin: str = ""
+    selected_network: str = ""
     updated_at: float = field(default_factory=time.time)
     last_action_ts: float = 0.0
     last_input: str = ""  # Помним последний ввод юзера
@@ -64,6 +65,7 @@ class UserSession:
             "payment_context": self.payment_context,
             "selected_payment_method": self.selected_payment_method,
             "selected_coin": self.selected_coin,
+            "selected_network": self.selected_network,
             "updated_at": self.updated_at,
             "last_input": self.last_input,
             "requested_coin_amount": self.requested_coin_amount,
@@ -79,6 +81,7 @@ class UserSession:
             payment_context=data.get("payment_context", ""),
             selected_payment_method=data.get("selected_payment_method", ""),
             selected_coin=data.get("selected_coin", ""),
+            selected_network=data.get("selected_network", ""),
             updated_at=data.get("updated_at", time.time()),
             last_input=data.get("last_input", ""),
             requested_coin_amount=float(data.get("requested_coin_amount", 0.0) or 0.0),
