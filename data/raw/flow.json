@@ -3419,5 +3419,55 @@
     ],
     "media": null,
     "text_links": []
+  },
+  "c7cac828f80509cbe366969bce1b6a84": {
+    "text": "На какую сумму выписать BTC Voucher?\n*Его сможет обналичить любой пользователь, знающий код.\n\nДоступно: 0 BTC\nПримерно: 0 RUB (по курсу: blockchain)",
+    "text_html": "На какую сумму выписать BTC Voucher?\n*Его сможет обналичить любой пользователь, знающий код.\n\nДоступно: 0 BTC\nПримерно: 0 RUB (по курсу: blockchain)",
+    "text_markdown": "На какую сумму выписать BTC Voucher?\n*Его сможет обналичить любой пользователь, знающий код.\n\nДоступно: 0 BTC\nПримерно: 0 RUB (по курсу: blockchain)",
+    "buttons": [
+      {
+        "text": "❌ Отмена",
+        "type": "KeyboardButton",
+        "row": 0,
+        "col": 0
+      }
+    ],
+    "button_rows": [
+      [
+        {
+          "text": "❌ Отмена",
+          "type": "KeyboardButton",
+          "row": 0,
+          "col": 0
+        }
+      ]
+    ],
+    "media": null,
+    "text_links": []
+  },
+  "d8508c2e03a4ebede813a4f17a3f1e1f": {
+    "text": "У вас недостаточно BTC, ваш баланс 0 BTC.\n\nНа какую сумму выписать BTC Voucher?\n*Его сможет обналичить любой пользователь, знающий код.\n\nДоступно: 0 BTC\nПримерно: 0 RUB (по курсу: blockchain)",
+    "text_html": "У вас недостаточно BTC, ваш баланс 0 BTC.\n\nНа какую сумму выписать BTC Voucher?\n*Его сможет обналичить любой пользователь, знающий код.\n\nДоступно: 0 BTC\nПримерно: 0 RUB (по курсу: blockchain)",
+    "text_markdown": "У вас недостаточно BTC, ваш баланс 0 BTC.\n\nНа какую сумму выписать BTC Voucher?\n*Его сможет обналичить любой пользователь, знающий код.\n\nДоступно: 0 BTC\nПримерно: 0 RUB (по курсу: blockchain)",
+    "buttons": [
+      {
+        "text": "❌ Отмена",
+        "type": "KeyboardButton",
+        "row": 0,
+        "col": 0
+      }
+    ],
+    "button_rows": [
+      [
+        {
+          "text": "❌ Отмена",
+          "type": "KeyboardButton",
+          "row": 0,
+          "col": 0
+        }
+      ]
+    ],
+    "media": null,
+    "text_links": []
   }
 }

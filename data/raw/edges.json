@@ -67,7 +67,7 @@
   {
     "from": "31ed12ff3a0f71a3b2ac7a963bb23b6f",
     "action": "Bitcoin (BTC)",
-    "to": "4dd498fb2857472407baa8a4e213d9d9"
+    "to": "c7cac828f80509cbe366969bce1b6a84"
   },
   {
     "from": "38411b3ac84128632f281182e8a4f9db",
@@ -212,7 +212,7 @@
   {
     "from": "4dd498fb2857472407baa8a4e213d9d9",
     "action": "📤 Отправить",
-    "to": "b431f99da6e9a524a9846e8c7a37aa70"
+    "to": "98399949795fe1949116f8a4ad3119e9"
   },
   {
     "from": "4dd498fb2857472407baa8a4e213d9d9",
@@ -598,5 +598,20 @@
     "from": "8159fb3f2182fd41a3232b267aba175d",
     "action": "✅ Согласен",
     "to": "0491b32aa93fbb577f1f8db1e6b06aca"
+  },
+  {
+    "from": "c7cac828f80509cbe366969bce1b6a84",
+    "action": "<manual-input>",
+    "to": "d8508c2e03a4ebede813a4f17a3f1e1f"
+  },
+  {
+    "from": "c7cac828f80509cbe366969bce1b6a84",
+    "action": "❌ Отмена",
+    "to": "4dd498fb2857472407baa8a4e213d9d9"
+  },
+  {
+    "from": "d8508c2e03a4ebede813a4f17a3f1e1f",
+    "action": "❌ Отмена",
+    "to": "4dd498fb2857472407baa8a4e213d9d9"
   }
 ]
